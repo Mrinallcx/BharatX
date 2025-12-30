@@ -437,7 +437,7 @@ export default function PricingTable({ subscriptionDetails, user }: PricingTable
                 </li>
                 <li className="flex items-center">
                   <div className="w-1.5 h-1.5 bg-primary rounded-full mr-3 flex-shrink-0"></div>
-                  Scira Lookout
+                  BharatX Lookout
                 </li>
               </ul>
 
@@ -559,7 +559,7 @@ export default function PricingTable({ subscriptionDetails, user }: PricingTable
           </p>
           <p className="text-sm text-muted-foreground">
             Questions?{' '}
-            <a href="mailto:zaid@scira.ai" className="text-foreground hover:underline">
+            <a href="mailto:support@bharat0x.xyz" className="text-foreground hover:underline">
               Get in touch
             </a>
           </p>

@@ -2,10 +2,10 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Scira - AI-powered Search Engine',
-    short_name: 'Scira',
+    name: 'BharatX - Finance AI Search Engine',
+    short_name: 'BharatX',
     description:
-      'A minimalistic AI-powered search engine that helps you find information on the internet using advanced AI models like GPT-4, Claude, and Grok',
+      'Crafted in Bharat, Calculated for the world || India\'s first ever finance AI search engine',
     start_url: '/',
     display: 'standalone',
     categories: ['search', 'ai', 'productivity'],

@@ -63,11 +63,11 @@ const ChatInterface = memo(
     const [q] = useQueryState('q', parseAsString.withDefault(''));
     const [input, setInput] = useState<string>('');
 
-    const [selectedModel, setSelectedModel] = useLocalStorage('scira-selected-model', 'scira-grok-4-fast-think');
-    const [selectedGroup, setSelectedGroup] = useLocalStorage<SearchGroupId>('scira-selected-group', 'web');
+    const [selectedModel, setSelectedModel] = useLocalStorage('bharatx-selected-model', 'bharatx-grok-4-fast-think');
+    const [selectedGroup, setSelectedGroup] = useLocalStorage<SearchGroupId>('bharatx-selected-group', 'web');
     const [selectedConnectors, setSelectedConnectors] = useState<ConnectorProvider[]>([]);
     const [isCustomInstructionsEnabled, setIsCustomInstructionsEnabled] = useLocalStorage(
-      'scira-custom-instructions-enabled',
+      'bharatx-custom-instructions-enabled',
       true,
     );
 
@@ -85,20 +85,20 @@ const ChatInterface = memo(
 
     // Get persisted values for dialog states
     const [persistedHasShownUpgradeDialog, setPersitedHasShownUpgradeDialog] = useLocalStorage(
-      'scira-upgrade-prompt-shown',
+      'bharatx-upgrade-prompt-shown',
       false,
     );
     const [persistedHasShownSignInPrompt, setPersitedHasShownSignInPrompt] = useLocalStorage(
-      'scira-signin-prompt-shown',
+      'bharatx-signin-prompt-shown',
       false,
     );
     const [persistedHasShownLookoutAnnouncement, setPersitedHasShownLookoutAnnouncement] = useLocalStorage(
-      'scira-lookout-announcement-shown',
+      'bharatx-lookout-announcement-shown',
       false,
     );
 
     const [searchProvider, _] = useLocalStorage<'exa' | 'parallel' | 'tavily' | 'firecrawl'>(
-      'scira-search-provider',
+      'bharatx-search-provider',
       'parallel',
     );
 
@@ -180,7 +180,7 @@ const ChatInterface = memo(
       // Also prevent infinite loops by ensuring we're not already on the default model
       if (currentModelRequiresPro && !isUserPro && selectedModel !== 'scira-grok-4-fast-think') {
         console.log(`Auto-switching from pro model '${selectedModel}' to 'scira-grok-4-fast-think' - user lost pro access`);
-        setSelectedModel('scira-grok-4-fast-think');
+        setSelectedModel('bharatx-grok-4-fast-think');
 
         // Show a toast notification to inform the user
         toast.info('Switched to default model - Pro subscription required for premium models');

@@ -1,6 +1,6 @@
-# Scira
+# BharatX
 
-A minimalistic AI-powered search engine that helps you find information on the internet.
+Crafted in Bharat, Calculated for the world || India's first ever finance AI search engine
 
 <a href="https://vercel.com/oss">
   <img alt="Vercel OSS Program" src="https://vercel.com/oss/program-badge.svg" />
@@ -9,11 +9,11 @@ A minimalistic AI-powered search engine that helps you find information on the i
 <br />
 
 
-![Scira](/app/opengraph-image.png)
+![BharatX](/app/opengraph-image.png)
 
 <br />
 
-🔗 **[Try Scira at scira.ai](https://scira.ai)**
+🔗 **[Try BharatX at bharat0x.xyz](https://bharat0x.xyz)**
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/zaidmukaddam/scira)
 
@@ -124,9 +124,9 @@ A minimalistic AI-powered search engine that helps you find information on the i
 
 ### Deploy your own
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fzaidmukaddam%2Fscira&env=XAI_API_KEY,OPENAI_API_KEY,ANTHROPIC_API_KEY,GROQ_API_KEY,GOOGLE_GENERATIVE_AI_API_KEY,DAYTONA_API_KEY,DATABASE_URL,BETTER_AUTH_SECRET,GITHUB_CLIENT_ID,GITHUB_CLIENT_SECRET,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,TWITTER_CLIENT_ID,TWITTER_CLIENT_SECRET,REDIS_URL,ELEVENLABS_API_KEY,TAVILY_API_KEY,EXA_API_KEY,TMDB_API_KEY,YT_ENDPOINT,FIRECRAWL_API_KEY,OPENWEATHER_API_KEY,GOOGLE_MAPS_API_KEY,MAPBOX_ACCESS_TOKEN,AVIATION_STACK_API_KEY,CRON_SECRET,BLOB_READ_WRITE_TOKEN,MEM0_API_KEY,MEM0_ORG_ID,MEM0_PROJECT_ID,SMITHERY_API_KEY,NEXT_PUBLIC_MAPBOX_TOKEN,NEXT_PUBLIC_POSTHOG_KEY,NEXT_PUBLIC_POSTHOG_HOST,NEXT_PUBLIC_SCIRA_PUBLIC_API_KEY,SCIRA_API_KEY&envDescription=API%20keys%20and%20configuration%20required%20for%20Scira%20to%20function)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMrinallcx%2FBharatX&env=XAI_API_KEY,OPENAI_API_KEY,ANTHROPIC_API_KEY,GROQ_API_KEY,GOOGLE_GENERATIVE_AI_API_KEY,DAYTONA_API_KEY,DATABASE_URL,BETTER_AUTH_SECRET,GITHUB_CLIENT_ID,GITHUB_CLIENT_SECRET,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,TWITTER_CLIENT_ID,TWITTER_CLIENT_SECRET,REDIS_URL,ELEVENLABS_API_KEY,TAVILY_API_KEY,EXA_API_KEY,TMDB_API_KEY,YT_ENDPOINT,FIRECRAWL_API_KEY,OPENWEATHER_API_KEY,GOOGLE_MAPS_API_KEY,MAPBOX_ACCESS_TOKEN,AVIATION_STACK_API_KEY,CRON_SECRET,BLOB_READ_WRITE_TOKEN,MEM0_API_KEY,MEM0_ORG_ID,MEM0_PROJECT_ID,SMITHERY_API_KEY,NEXT_PUBLIC_MAPBOX_TOKEN,NEXT_PUBLIC_POSTHOG_KEY,NEXT_PUBLIC_POSTHOG_HOST,NEXT_PUBLIC_BHARATX_PUBLIC_API_KEY,BHARATX_API_KEY&envDescription=API%20keys%20and%20configuration%20required%20for%20BharatX%20to%20function)
 
-## Set Scira as your default search engine
+## Set BharatX as your default search engine
 
 1. **Open the Chrome browser settings**:
    - Click on the three vertical dots in the upper right corner of the browser.
@@ -140,19 +140,19 @@ A minimalistic AI-powered search engine that helps you find information on the i
    - Click on "Add" next to "Site search."
 
 4. **Set the search engine name**:
-   - Enter `Scira` in the "Search engine" field.
+   - Enter `BharatX` in the "Search engine" field.
 
 5. **Set the search engine URL**:
-   - Enter `https://scira.ai?q=%s` in the "URL with %s in place of query" field.
+   - Enter `https://bharat0x.xyz?q=%s` in the "URL with %s in place of query" field.
 
 6. **Set the search engine shortcut**:
-   - Enter `sh` in the "Shortcut" field.
+   - Enter `bx` in the "Shortcut" field.
 
 7. **Set Default**:
    - Click on the three dots next to the search engine you just added.
    - Select "Make default" from the dropdown menu.
 
-After completing these steps, you should be able to use Scira as your default search engine in Chrome.
+After completing these steps, you should be able to use BharatX as your default search engine in Chrome.
 
 ### Local development
 
@@ -175,11 +175,11 @@ The application can be run using Docker in two ways:
 1. Create a `.env` file based on `.env.example` with your API keys
 2. Build the Docker image:
    ```bash
-   docker build -t scira.app .
+   docker build -t bharatx.app .
    ```
 3. Run the container:
    ```bash
-   docker run --env-file .env -p 3000:3000 scira.app
+   docker run --env-file .env -p 3000:3000 bharatx.app
    ```
 
 The application uses a multi-stage build process to minimize the final image size and implements security best practices. The production image runs on Node.js LTS with Alpine Linux for a minimal footprint.

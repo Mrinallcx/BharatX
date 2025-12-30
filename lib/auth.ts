@@ -436,6 +436,6 @@ export const auth = betterAuth({
     : []),
     nextCookies(),
   ],
-  trustedOrigins: ['http://localhost:3000', 'https://scira.ai', 'https://www.scira.ai'],
-  allowedOrigins: ['http://localhost:3000', 'https://scira.ai', 'https://www.scira.ai'],
+  trustedOrigins: ['http://localhost:3000', 'https://bharat0x.xyz', 'https://www.bharat0x.xyz'],
+  allowedOrigins: ['http://localhost:3000', 'https://bharat0x.xyz', 'https://www.bharat0x.xyz'],
 });

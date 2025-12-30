@@ -1,4 +1,4 @@
-export function SciraLogo({
+export function BharatXLogo({
   className,
   width,
   height,

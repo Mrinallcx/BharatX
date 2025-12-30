@@ -138,7 +138,7 @@ const UserProfile = memo(
     const [signingIn, setSigningIn] = useState(false);
     const [signInDialogOpen, setSignInDialogOpen] = useState(false);
     const [showEmail, setShowEmail] = useState(false);
-    const [blurPersonalInfo] = useLocalStorage<boolean>('scira-blur-personal-info', false);
+    const [blurPersonalInfo] = useLocalStorage<boolean>('bharatx-blur-personal-info', false);
     const { data: session, isPending } = useSession();
     const router = useRouter();
 

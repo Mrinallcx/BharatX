@@ -18,7 +18,7 @@ import { TextShimmer } from '@/components/core/text-shimmer';
 import { cn } from '@/lib/utils';
 import { type XQLMessage } from '@/app/api/xql/route';
 import { highlight } from 'sugar-high';
-import { SciraLogo } from '@/components/logos/scira-logo';
+import { BharatXLogo } from '@/components/logos/scira-logo';
 
 export default function XQLPage() {
   const [input, setInput] = useState<string>('');
@@ -411,7 +411,7 @@ export default function XQLPage() {
                       <CardContent className="p-0">
                         <div className="flex flex-wrap items-center justify-between gap-2 p-3 sm:p-4">
                           <div className="flex items-center gap-2 min-w-0">
-                            <SciraLogo className="size-6 text-foreground flex-shrink-0" />
+                            <BharatXLogo className="size-6 text-foreground flex-shrink-0" />
                             <span className="font-semibold text-foreground text-sm sm:text-base">
                               BharatX found {citations.length} Posts
                             </span>

@@ -287,18 +287,18 @@ const XSearch: React.FC<XSearchProps> = ({ result, args }) => {
 
                   {/* More button - cleaner design */}
                   {remainingTweets.length > 0 && (
-                    <button
-                      onClick={() => setIsSheetOpen(true)}
-                      className="flex-shrink-0 w-[260px] sm:w-[300px] min-h-[160px] border border-dashed border-border/60 dark:border-2 dark:border-solid dark:border-border rounded-lg flex flex-col items-center justify-center hover:border-border dark:hover:border-border hover:bg-accent/20 transition-colors group"
-                    >
-                      <div className="p-2 rounded-full bg-muted/50 mb-2 group-hover:bg-muted transition-colors">
-                        <Icons.Messages className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <p className="font-medium text-xs text-foreground">
-                        +{remainingTweets.length} more
-                      </p>
-                      <p className="text-[10px] text-muted-foreground/70 mt-0.5">View all posts</p>
-                    </button>
+                      <button
+                        onClick={() => setIsSheetOpen(true)}
+                        className="flex-shrink-0 w-[260px] sm:w-[300px] min-h-[160px] border border-dashed border-border/60 dark:border-2 dark:border-solid dark:border-border rounded-lg flex flex-col items-center justify-center hover:border-border dark:hover:border-border hover:bg-accent/20 transition-colors group"
+                      >
+                        <div className="p-2 rounded-full bg-muted/50 mb-2 group-hover:bg-muted transition-colors">
+                          <Icons.Messages className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <p className="font-medium text-xs text-foreground">
+                          +{remainingTweets.length} more
+                        </p>
+                        <p className="text-[10px] text-muted-foreground/70 mt-0.5">View all posts</p>
+                      </button>
                   )}
                 </div>
               </div>
@@ -307,40 +307,40 @@ const XSearch: React.FC<XSearchProps> = ({ result, args }) => {
             {/* Sheet for viewing all posts - always available */}
             {tweetCitations.length > 0 && (
               <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-                <SheetContent
-                  side="right"
-                  className="w-full sm:w-[480px] md:w-[550px] sm:max-w-[90vw] p-0"
-                >
-                  <div className="flex flex-col h-full bg-background">
-                    <SheetHeader className="px-4 py-3 border-b border-border/40">
-                      <SheetTitle className="flex items-center gap-2 text-sm">
-                        <div className="p-1 rounded bg-black dark:bg-white">
-                          <XLogoIcon className="h-3 w-3 text-white dark:text-black" />
-                        </div>
-                        <span>All Posts ({tweetCitations.length})</span>
-                      </SheetTitle>
-                    </SheetHeader>
-                    <div className="flex-1 overflow-y-auto p-3">
-                      <div className="space-y-4 max-w-full sm:max-w-[520px] mx-auto">
-                        {tweetCitations.map((citation, index) => (
-                          <motion.div
-                            key={`${citation.tweet_id}-${index}`}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.015 }}
-                          >
-                            {citation.tweet_id && (
-                              <div className="tweet-wrapper-sheet">
-                                <Tweet id={citation.tweet_id} />
+                      <SheetContent
+                        side="right"
+                        className="w-full sm:w-[480px] md:w-[550px] sm:max-w-[90vw] p-0"
+                      >
+                        <div className="flex flex-col h-full bg-background">
+                          <SheetHeader className="px-4 py-3 border-b border-border/40">
+                            <SheetTitle className="flex items-center gap-2 text-sm">
+                              <div className="p-1 rounded bg-black dark:bg-white">
+                                <XLogoIcon className="h-3 w-3 text-white dark:text-black" />
                               </div>
-                            )}
-                          </motion.div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </SheetContent>
-              </Sheet>
+                              <span>All Posts ({tweetCitations.length})</span>
+                            </SheetTitle>
+                          </SheetHeader>
+                          <div className="flex-1 overflow-y-auto p-3">
+                            <div className="space-y-4 max-w-full sm:max-w-[520px] mx-auto">
+                              {tweetCitations.map((citation, index) => (
+                                <motion.div
+                                  key={`${citation.tweet_id}-${index}`}
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ delay: index * 0.015 }}
+                                >
+                                  {citation.tweet_id && (
+                                    <div className="tweet-wrapper-sheet">
+                                      <Tweet id={citation.tweet_id} />
+                                    </div>
+                                  )}
+                                </motion.div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </SheetContent>
+                    </Sheet>
             )}
 
             {/* No tweets state - more minimal */}

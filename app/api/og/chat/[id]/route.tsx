@@ -4,7 +4,7 @@ import { getChatWithUserById } from '@/lib/db/queries';
 import { format } from 'date-fns';
 import fs from 'fs';
 import path from 'path';
-import { SciraLogo } from '@/components/logos/scira-logo';
+import { BharatXLogo } from '@/components/logos/scira-logo';
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -65,7 +65,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
                 textAlign: 'center',
               }}
             >
-              <SciraLogo width={120} height={120} color="#ffffff" />
+              <BharatXLogo width={120} height={120} color="#ffffff" />
               <div
                 style={{
                   fontSize: 56,
@@ -195,7 +195,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             >
               {/* Left: brand and tagline */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <SciraLogo width={28} height={28} color="#ffffff" />
+                <BharatXLogo width={28} height={28} color="#ffffff" />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ fontSize: 18, color: '#ffffff', fontFamily: 'BeVietnamPro', fontWeight: 800 }}>
                     Scira AI

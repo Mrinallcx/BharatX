@@ -34,7 +34,7 @@ import { ElevenLabsLogo } from '@/components/logos/elevenlabs-logo';
 import { PRICING, SEARCH_LIMITS } from '@/lib/constants';
 
 import { ThemeSwitcher } from '@/components/theme-switcher';
-import { SciraLogo } from '@/components/logos/scira-logo';
+import { BharatXLogo } from '@/components/logos/scira-logo';
 
 export default function AboutPage() {
   const router = useRouter();
@@ -189,7 +189,7 @@ export default function AboutPage() {
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <Link href="/" className="flex justify-items-end gap-1.5 group">
-              <SciraLogo className="size-7 transition-transform group-hover:scale-110" />
+              <BharatXLogo className="size-7 transition-transform group-hover:scale-110" />
               <span className="text-2xl font-normal tracking-tighter font-be-vietnam-pro">Scira</span>
             </Link>
 
@@ -262,7 +262,7 @@ export default function AboutPage() {
         <div className="container max-w-4xl mx-auto text-center space-y-12">
           <div className="space-y-6">
             <div className="flex items-end justify-center gap-1 mb-8">
-              <SciraLogo className="size-12" />
+              <BharatXLogo className="size-12" />
               <h1 className="text-4xl font-normal font-be-vietnam-pro tracking-tighter">Scira</h1>
             </div>
 
@@ -473,7 +473,7 @@ export default function AboutPage() {
               <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
                 <Eye className="h-6 w-6 text-primary" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">Scira Lookout</h3>
+              <h3 className="text-lg font-semibold mb-2">BharatX Lookout</h3>
               <p className="text-muted-foreground">
                 Schedule automated searches to monitor trends and get regular updates on topics that matter to you.
               </p>
@@ -1034,7 +1034,7 @@ export default function AboutPage() {
                 </li>
                 <li className="flex items-start gap-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 flex-shrink-0"></div>
-                  <span className="text-muted-foreground">Scira Lookout</span>
+                  <span className="text-muted-foreground">BharatX Lookout</span>
                 </li>
               </ul>
 
@@ -1072,9 +1072,9 @@ export default function AboutPage() {
 
           <ProAccordion type="single" collapsible className="w-full">
             <ProAccordionItem value="item-1">
-              <ProAccordionTrigger>What is Scira?</ProAccordionTrigger>
+              <ProAccordionTrigger>What is BharatX?</ProAccordionTrigger>
               <ProAccordionContent>
-                Scira is an open-source AI-powered search engine that uses RAG (Retrieval-Augmented Generation) and
+                BharatX is India's first ever finance AI search engine. Crafted in Bharat, Calculated for the world. We use RAG (Retrieval-Augmented Generation) and
                 search grounding to provide accurate, up-to-date answers from reliable sources.
               </ProAccordionContent>
             </ProAccordionItem>
@@ -1124,7 +1124,7 @@ export default function AboutPage() {
           <div className="text-center mt-12 space-y-6">
             <p className="text-muted-foreground">
               Have more questions?{' '}
-              <a href="mailto:zaid@scira.ai" className="text-primary hover:text-primary/80 transition-colors">
+              <a href="mailto:support@bharat0x.xyz" className="text-primary hover:text-primary/80 transition-colors">
                 Contact us
               </a>
             </p>
@@ -1158,7 +1158,7 @@ export default function AboutPage() {
         <div className="container max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-3">
-              <SciraLogo className="size-8" />
+              <BharatXLogo className="size-8" />
               <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Scira. All rights reserved.</p>
             </div>
 

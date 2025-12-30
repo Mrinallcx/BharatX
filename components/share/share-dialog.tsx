@@ -40,7 +40,7 @@ export function ShareDialog({
   const [copied, setCopied] = useState(false);
   const [isChangingVisibility, setIsChangingVisibility] = useState(false);
 
-  const shareUrl = chatId ? `https://scira.ai/search/${chatId}` : '';
+  const shareUrl = chatId ? `https://bharat0x.xyz/search/${chatId}` : '';
 
   useEffect(() => {
     if (!isOpen) {

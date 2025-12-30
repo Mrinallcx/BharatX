@@ -22,4 +22,4 @@ export { greetingTool } from './greeting';
 export { createConnectorsSearchTool } from './connectors-search';
 export { createMemoryTools, type SearchMemoryTool, type AddMemoryTool } from './supermemory';
 export { codeContextTool } from './code-context';
-export { binanceTickerTool, binanceKlineTool, binanceExchangeInfoTool } from './binance-tools';
+export { binanceTickerTool, binanceKlineTool, binanceOrderbookTool, binanceExchangeInfoTool } from './binance-tools';

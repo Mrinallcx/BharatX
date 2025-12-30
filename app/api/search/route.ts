@@ -69,6 +69,7 @@ import {
   codeContextTool,
   binanceTickerTool,
   binanceKlineTool,
+  binanceOrderbookTool,
   binanceExchangeInfoTool,
 } from '@/lib/tools';
 import { GroqProviderOptions } from '@ai-sdk/groq';
@@ -91,7 +92,7 @@ export function getStreamContext() {
     try {
       globalStreamContext = createResumableStreamContext({
         waitUntil: after,
-        keyPrefix: 'scira-ai',
+        keyPrefix: 'bharatx-ai',
       });
     } catch (error: any) {
       if (error.message.includes('REDIS_URL')) {
@@ -428,6 +429,7 @@ export async function POST(req: Request) {
 
             binance_ticker: binanceTickerTool,
             binance_kline: binanceKlineTool,
+            binance_orderbook: binanceOrderbookTool,
             binance_exchange_info: binanceExchangeInfoTool,
 
             x_search: xSearchTool,

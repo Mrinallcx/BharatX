@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import NextImage from 'next/image';
 import { ExternalLink } from 'lucide-react';
-import { SciraLogo } from '@/components/logos/scira-logo';
+import { BharatXLogo } from '@/components/logos/scira-logo';
 
 const container = {
   hidden: { opacity: 0 },
@@ -41,7 +41,7 @@ export default function TermsPage() {
             <motion.div variants={item} className="text-center">
               <Link href="/" className="inline-flex items-center gap-3 font-be-vietnam-pro font-bold">
                 <div className="relative w-14 h-14 rounded-full bg-background/90 shadow-sm flex items-center justify-center border">
-                  <SciraLogo className="size-8 opacity-90" />
+                  <BharatXLogo className="size-8 opacity-90" />
                 </div>
               </Link>
             </motion.div>
@@ -73,7 +73,7 @@ export default function TermsPage() {
 
           <h2>2. Description of Service</h2>
           <p>
-            Scira AI is a minimalistic AI-powered search engine that helps users find information on the internet. Our
+            BharatX is India's first ever finance AI search engine. Crafted in Bharat, Calculated for the world. Our
             service utilizes artificial intelligence to process search queries and provide relevant results and
             information.
           </p>
@@ -230,8 +230,8 @@ export default function TermsPage() {
           <h2>14. Contact Us</h2>
           <p>If you have any questions about these Terms of Service, please contact us at:</p>
           <p>
-            <a href="mailto:zaid@scira.ai" className="flex items-center gap-1">
-              zaid@scira.ai <ExternalLink className="h-4 w-4" />
+            <a href="mailto:support@bharat0x.xyz" className="flex items-center gap-1">
+              support@bharat0x.xyz <ExternalLink className="h-4 w-4" />
             </a>
           </p>
 
@@ -254,7 +254,7 @@ export default function TermsPage() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-background border flex items-center justify-center">
-                <SciraLogo className="size-4 opacity-80" />
+                <BharatXLogo className="size-4 opacity-80" />
               </div>
               <div className="text-sm text-muted-foreground">
                 © {new Date().getFullYear()} Scira AI by Zaid Mukaddam

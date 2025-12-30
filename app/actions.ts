@@ -143,7 +143,9 @@ export async function suggestQuestions(history: any[]) {
   };
 }
 
-export async function checkImageModeration(images: string[]) {
+export async function checkImageModeration(images: string[]): Promise<string> {
+  'use server';
+  
   const messages: ModelMessage[] = images.map((image) => ({
     role: 'user',
     content: [{ type: 'image', image: image }],
@@ -158,6 +160,7 @@ export async function checkImageModeration(images: string[]) {
       },
     },
   });
+  
   return text;
 }
 
@@ -267,7 +270,7 @@ const groupTools = {
   reddit: ['reddit_search', 'datetime'] as const,
   stocks: ['stock_chart', 'currency_converter', 'datetime'] as const,
   crypto: ['coin_data', 'coin_ohlc', 'coin_data_by_contract', 'datetime'] as const,
-  binance: ['binance_ticker', 'binance_kline', 'binance_exchange_info', 'datetime'] as const,
+  binance: ['binance_ticker', 'binance_kline', 'binance_orderbook', 'binance_exchange_info', 'datetime'] as const,
   chat: [] as const,
   extreme: ['extreme_search'] as const,
   x: ['x_search'] as const,
@@ -1366,6 +1369,7 @@ $$
   ### Available Tools:
   - **binance_ticker**: Get 24-hour price statistics for any trading pair (e.g., BTCUSDT, ETHUSDT, BNBBTC)
   - **binance_kline**: Get candlestick/OHLC chart data with various time intervals (1m, 5m, 15m, 1h, 4h, 1d, 1w, etc.)
+  - **binance_orderbook**: Get orderbook (market depth) data showing bids and asks with price and quantity levels
   - **binance_exchange_info**: Get information about available trading pairs on Binance
 
   ### Common Trading Pairs:
@@ -1380,6 +1384,7 @@ $$
   ### Tool Selection Guidelines:
   - **Price queries**: Use 'binance_ticker' for current price, 24h stats, volume
   - **Chart requests**: Use 'binance_kline' with appropriate interval (1h, 4h, 1d, 1w)
+  - **Orderbook/Market depth**: Use 'binance_orderbook' to see bids, asks, spread, and market depth
   - **Trading pair info**: Use 'binance_exchange_info' to find available pairs
 
   ### Response Format:
@@ -1393,6 +1398,8 @@ $$
   - "What's the current price of Bitcoin?" → Use binance_ticker with BTCUSDT
   - "Show me BTCUSDT chart for the last week" → Use binance_kline with interval 1d
   - "Get 24hr stats for Ethereum" → Use binance_ticker with ETHUSDT
+  - "Show me the orderbook for BTCUSDT" → Use binance_orderbook with BTCUSDT
+  - "What's the market depth for ETHUSDT?" → Use binance_orderbook with ETHUSDT
   - "What trading pairs are available?" → Use binance_exchange_info
 
   ### Important Notes:
@@ -2113,11 +2120,11 @@ export async function createScheduledLookout({
 
           if (delay > 0) {
             await qstash.publish({
-              // if dev env use localhost:3000/api/lookout, else use scira.ai/api/lookout
+              // if dev env use localhost:3000/api/lookout, else use bharat0x.xyz/api/lookout
               url:
                 process.env.NODE_ENV === 'development'
                   ? process.env.NGROK_URL + '/api/lookout'
-                  : `https://scira.ai/api/lookout`,
+                  : `https://bharat0x.xyz/api/lookout`,
               body: JSON.stringify({
                 lookoutId: lookout.id,
                 prompt,
@@ -2147,11 +2154,11 @@ export async function createScheduledLookout({
           console.log('📅 Cron schedule with timezone:', cronSchedule);
 
           const scheduleResponse = await qstash.schedules.create({
-            // if dev env use localhost:3000/api/lookout, else use scira.ai/api/lookout
+            // if dev env use localhost:3000/api/lookout, else use bharat0x.xyz/api/lookout
             destination:
               process.env.NODE_ENV === 'development'
                 ? process.env.NGROK_URL + '/api/lookout'
-                : `https://scira.ai/api/lookout`,
+                : `https://bharat0x.xyz/api/lookout`,
             method: 'POST',
             cron: cronSchedule,
             body: JSON.stringify({
@@ -2347,11 +2354,11 @@ export async function updateLookoutAction({
 
         // Create new schedule with updated cron
         const scheduleResponse = await qstash.schedules.create({
-          // if dev env use localhost:3000/api/lookout, else use scira.ai/api/lookout
+          // if dev env use localhost:3000/api/lookout, else use bharat0x.xyz/api/lookout
           destination:
             process.env.NODE_ENV === 'development'
               ? process.env.NGROK_URL + '/api/lookout'
-              : `https://scira.ai/api/lookout`,
+              : `https://bharat0x.xyz/api/lookout`,
           method: 'POST',
           cron: cronSchedule,
           body: JSON.stringify({
@@ -2453,7 +2460,7 @@ export async function testLookoutAction({ id }: { id: string }) {
 
     // Make a POST request to the lookout API endpoint to trigger the run
     const response = await fetch(
-      process.env.NODE_ENV === 'development' ? process.env.NGROK_URL + '/api/lookout' : `https://scira.ai/api/lookout`,
+      process.env.NODE_ENV === 'development' ? process.env.NGROK_URL + '/api/lookout' : `https://bharat0x.xyz/api/lookout`,
       {
         method: 'POST',
         headers: {

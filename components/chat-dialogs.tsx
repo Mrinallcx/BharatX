@@ -110,7 +110,7 @@ export const PostMessageUpgradeDialog = React.memo(({ open, onOpenChange }: Post
           <div className="relative h-80 overflow-hidden rounded-t-lg">
             <Image
               src="/placeholder.png"
-              alt="Scira Pro"
+              alt="BharatX Pro"
               width={1200}
               height={630}
               className="w-full h-full object-cover"
@@ -140,7 +140,7 @@ export const PostMessageUpgradeDialog = React.memo(({ open, onOpenChange }: Post
               </div>
               <DialogTitle className="flex items-center gap-3 text-white mb-2">
                 <span className="text-4xl font-medium flex items-center gap-2 font-be-vietnam-pro">
-                  scira
+                  bharatx
                   <ProBadge className="!text-white !bg-white/20 !ring-white/30 font-light text-xl !tracking-normal" />
                 </span>
               </DialogTitle>
@@ -174,12 +174,10 @@ export const PostMessageUpgradeDialog = React.memo(({ open, onOpenChange }: Post
                 </p>
               </DialogDescription>
               <Button
-                onClick={() => {
-                  window.location.href = '/pricing';
-                }}
-                className="backdrop-blur-md bg-white/90 border border-white/20 text-black hover:bg-white w-full font-medium mt-3"
+                disabled
+                className="backdrop-blur-md bg-white/90 border border-white/20 text-black hover:bg-white w-full font-medium mt-3 opacity-60 cursor-not-allowed"
               >
-                {discountConfig?.buttonText || 'Upgrade to Pro'}
+                Coming Soon
               </Button>
             </div>
           </div>
@@ -189,7 +187,7 @@ export const PostMessageUpgradeDialog = React.memo(({ open, onOpenChange }: Post
           <div className="flex items-center gap-4">
             <CheckIcon className="size-4 text-primary flex-shrink-0" />
             <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">Scira Lookout</p>
+              <p className="text-sm font-medium text-foreground">BharatX Lookout</p>
               <p className="text-xs text-muted-foreground">Automated search monitoring on your schedule</p>
             </div>
           </div>
@@ -232,7 +230,7 @@ export const PostMessageUpgradeDialog = React.memo(({ open, onOpenChange }: Post
             className="w-full text-muted-foreground hover:text-foreground mt-2"
             size="sm"
           >
-            Not now
+            Close
           </Button>
         </div>
       </DialogContent>
@@ -284,7 +282,7 @@ export const LookoutAnnouncementDialog = React.memo(({ open, onOpenChange }: Loo
           <div className="relative h-40 sm:h-48 overflow-hidden rounded-t-lg">
             <Image
               src="/lookout-promo.png"
-              alt="Scira Lookout"
+              alt="BharatX Lookout"
               width={1200}
               height={630}
               className="w-full h-full object-cover"
@@ -295,7 +293,7 @@ export const LookoutAnnouncementDialog = React.memo(({ open, onOpenChange }: Loo
                 New Feature
               </div>
               <DialogTitle className="text-white text-xl sm:text-2xl font-bold tracking-tight">
-                Introducing Scira Lookout
+                Introducing BharatX Lookout
               </DialogTitle>
               <DialogDescription className="text-white/80 text-sm mt-1">
                 Automated search monitoring on your schedule

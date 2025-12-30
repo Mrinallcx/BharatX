@@ -150,7 +150,7 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
     const [searchQuery, setSearchQuery] = useState('');
 
     // Global model order (Pro users): top-level hook to satisfy Rules of Hooks
-    const [globalModelOrder] = useLocalStorage<string[]>('scira-model-order-global', [] as string[]);
+    const [globalModelOrder] = useLocalStorage<string[]>('bharatx-model-order-global', [] as string[]);
 
     const normalizeText = useCallback((input: string): string => {
       return input
@@ -462,10 +462,10 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
 
     // Persisted ordering: category order and per-category model order
     const [modelCategoryOrder] = useLocalStorage<string[]>(
-      'scira-model-category-order',
+      'bharatx-model-category-order',
       isProUser ? ['Pro', 'Experimental', 'Free'] : ['Free', 'Experimental', 'Pro'],
     );
-    const [modelOrderMap] = useLocalStorage<Record<string, string[]>>('scira-model-order', {});
+    const [modelOrderMap] = useLocalStorage<Record<string, string[]>>('bharatx-model-order', {});
 
     const orderedGroupEntries = useMemo(() => {
       const baseOrder = modelCategoryOrder && modelCategoryOrder.length > 0
@@ -526,17 +526,17 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
       const isCurrentModelRestricted = isModelRestrictedInRegion(selectedModel, countryCode || undefined);
 
       // If current model is restricted in user's region, switch to default
-      if (isCurrentModelRestricted && selectedModel !== 'scira-grok-4-fast-think') {
-        console.log(`Auto-switching from restricted model '${selectedModel}' to 'scira-grok-4-fast-think' - model not available in region ${countryCode}`);
-        setSelectedModel('scira-grok-4-fast-think');
+        if (isCurrentModelRestricted && selectedModel !== 'bharatx-grok-4-fast-think') {
+          console.log(`Auto-switching from restricted model '${selectedModel}' to 'bharatx-grok-4-fast-think' - model not available in region ${countryCode}`);
+          setSelectedModel('bharatx-grok-4-fast-think');
         toast.info('Switched to default model - Selected model not available in your region');
         return;
       }
 
       // All models available to everyone - no model switching needed
       if (false) { // Disabled - all models free
-        console.log(`Auto-switching from pro model '${selectedModel}' to 'scira-grok-4-fast-think' - user lost pro access`);
-        setSelectedModel('scira-grok-4-fast-think');
+          console.log(`Auto-switching from pro model '${selectedModel}' to 'bharatx-grok-4-fast-think' - user lost pro access`);
+          setSelectedModel('bharatx-grok-4-fast-think');
 
         // Show a toast notification to inform the user
         toast.info('Switched to default model - Pro subscription required for premium models');
@@ -610,7 +610,7 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
                   const requiresPro = requiresProSubscription(model.value) && !isProUser;
                   const isLocked = requiresAuth || requiresPro;
                   // Only allow Grok 4 Fast Thinking to be clickable
-                  const isNotAllowed = model.value !== 'scira-grok-4-fast-think';
+                  const isNotAllowed = model.value !== 'bharatx-grok-4-fast-think';
 
                   if (isLocked || isNotAllowed) {
                     return (
@@ -846,7 +846,7 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
                   const requiresPro = requiresProSubscription(model.value) && !isProUser;
                   const isLocked = requiresAuth || requiresPro;
                   // Only allow Grok 4 Fast Thinking to be clickable
-                  const isNotAllowed = model.value !== 'scira-grok-4-fast-think';
+                  const isNotAllowed = model.value !== 'bharatx-grok-4-fast-think';
 
                   if (isLocked || isNotAllowed) {
                     return (
@@ -1198,12 +1198,10 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
                     </p>
                   </DialogDescription>
                   <Button
-                    onClick={() => {
-                      window.location.href = '/pricing';
-                    }}
-                    className="backdrop-blur-md bg-white/90 border border-white/20 text-black hover:bg-white w-full font-medium"
+                    disabled
+                    className="backdrop-blur-md bg-white/90 border border-white/20 text-black hover:bg-white w-full font-medium opacity-60 cursor-not-allowed"
                   >
-                    Upgrade to Pro
+                    Coming Soon
                   </Button>
                 </div>
               </div>
@@ -1239,7 +1237,7 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
               <div className="flex items-center gap-4">
                 <CheckIcon className="size-4 text-primary flex-shrink-0" />
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">Scira Lookout</p>
+                  <p className="text-sm font-medium text-foreground">BharatX Lookout</p>
                   <p className="text-xs text-muted-foreground">Automated search monitoring on your schedule</p>
                 </div>
               </div>
@@ -1256,7 +1254,7 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
                 className="w-full text-muted-foreground hover:text-foreground mt-2"
                 size="sm"
               >
-                Not now
+                Close
               </Button>
             </div>
           </DialogContent>
@@ -1774,6 +1772,7 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
     const { data: session } = useSession();
     const [open, setOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
+    const [tooltipOpen, setTooltipOpen] = useState(true);
     const isMobile = useIsMobile();
     const isExtreme = selectedGroup === 'extreme';
 
@@ -1783,7 +1782,7 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
     }, []);
 
     // Get search provider from localStorage with reactive updates
-    const [searchProvider] = useLocalStorage<SearchProvider>('scira-search-provider', 'parallel');
+    const [searchProvider] = useLocalStorage<SearchProvider>('bharatx-search-provider', 'parallel');
 
     // Get dynamic search groups based on the selected search provider
     const dynamicSearchGroups = useMemo(() => getSearchGroups(searchProvider), [searchProvider]);
@@ -1808,7 +1807,7 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
 
     // Persisted order for groups - must match settings-dialog.tsx
     const [groupOrder] = useLocalStorage<SearchGroupId[]>(
-      'scira-group-order',
+      'bharatx-group-order',
       dynamicSearchGroups.map((g) => g.id),
     );
 
@@ -1973,7 +1972,7 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
           {/* Group Selector Side - Conditional Rendering for Mobile/Desktop */}
           {isMobile ? (
             <Drawer open={open} onOpenChange={handleOpenChange}>
-              <Tooltip>
+              <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
                 <TooltipTrigger asChild>
                   <DrawerTrigger asChild>
                     <Button
@@ -2102,7 +2101,7 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
             </Drawer>
           ) : (
             <Popover open={open} onOpenChange={handleOpenChange}>
-              <Tooltip>
+              <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
                 <TooltipTrigger asChild>
                   <PopoverTrigger asChild>
                     <Button
@@ -2758,7 +2757,7 @@ const FormComponent: React.FC<FormComponentProps> = ({
           
           if (extremeModels.length > 0) {
             // Prioritize: scira-grok-4-fast-think if available, otherwise first free model, then first available
-            const defaultModel = extremeModels.find((m) => m.value === 'scira-grok-4-fast-think');
+            const defaultModel = extremeModels.find((m) => m.value === 'bharatx-grok-4-fast-think');
             const firstFreeModel = extremeModels.find((m) => !m.pro);
             const fallbackModel = extremeModels[0];
             
@@ -4027,12 +4026,10 @@ const FormComponent: React.FC<FormComponentProps> = ({
                     </p>
                   </DialogDescription>
                   <Button
-                    onClick={() => {
-                      window.location.href = '/pricing';
-                    }}
-                    className="backdrop-blur-md bg-white/90 border border-white/20 text-black hover:bg-white w-full font-medium mt-3"
+                    disabled
+                    className="backdrop-blur-md bg-white/90 border border-white/20 text-black hover:bg-white w-full font-medium mt-3 opacity-60 cursor-not-allowed"
                   >
-                    {discountConfig?.buttonText || 'Upgrade to Pro'}
+                    Coming Soon
                   </Button>
                 </div>
               </div>
@@ -4068,7 +4065,7 @@ const FormComponent: React.FC<FormComponentProps> = ({
               <div className="flex items-center gap-4">
                 <CheckIcon className="size-4 text-primary flex-shrink-0" />
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">Scira Lookout</p>
+                  <p className="text-sm font-medium text-foreground">BharatX Lookout</p>
                   <p className="text-xs text-muted-foreground">Automated search monitoring on your schedule</p>
                 </div>
               </div>
@@ -4085,7 +4082,7 @@ const FormComponent: React.FC<FormComponentProps> = ({
                 className="w-full text-muted-foreground hover:text-foreground mt-2"
                 size="sm"
               >
-                Not now
+                Close
               </Button>
             </div>
           </DialogContent>

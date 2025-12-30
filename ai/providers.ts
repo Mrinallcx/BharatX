@@ -26,7 +26,7 @@ const anannas = createOpenAI({
   baseURL: 'https://api.anannas.ai/v1',
   apiKey: process.env.ANANNAS_API_KEY,
   headers: {
-    'HTTP-Referer': 'https://scira.ai',
+    'HTTP-Referer': 'https://bharat0x.xyz',
     'X-Title': 'Scira AI',
     'Content-Type': 'application/json',
   },
@@ -41,7 +41,7 @@ export const scira = customProvider({
     'scira-grok-3': xai('grok-3'),
     'scira-grok-4': xai('grok-4'),
     'scira-grok-4-fast': xai('grok-4-fast-non-reasoning'),
-    'scira-grok-4-fast-think': xai('grok-4-fast'),
+    'bharatx-grok-4-fast-think': xai('grok-4-fast'),
     'scira-code': xai('grok-code-fast-1'),
     'scira-enhance': groq('moonshotai/kimi-k2-instruct-0905'),
     'scira-follow-up': xai('grok-4-fast-non-reasoning'),
@@ -158,7 +158,7 @@ interface Model {
 export const models: Model[] = [
   // Models (xAI)
   {
-    value: 'scira-grok-4-fast-think',
+    value: 'bharatx-grok-4-fast-think',
     label: 'Grok 4 Fast Thinking',
     description: "xAI's fastest multimodel reasoning LLM",
     vision: true,

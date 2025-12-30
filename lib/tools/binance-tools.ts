@@ -121,6 +121,81 @@ export const binanceKlineTool = tool({
   },
 });
 
+// Binance orderbook (market depth)
+export const binanceOrderbookTool = tool({
+  description: 'Get orderbook (market depth) data for a trading pair on Binance. Returns bids and asks with price and quantity levels.',
+  inputSchema: z.object({
+    symbol: z.string().describe('Trading pair symbol (e.g., BTCUSDT, ETHUSDT)'),
+    limit: z.number().optional().describe('Number of price levels to return (default: 100, valid: 5, 10, 20, 50, 100, 500, 1000, 5000)'),
+  }),
+  execute: async ({ 
+    symbol, 
+    limit = 100 
+  }: { 
+    symbol: string; 
+    limit?: number | null;
+  }) => {
+    console.log('Fetching Binance orderbook for:', symbol);
+
+    try {
+      // Validate limit
+      const validLimits = [5, 10, 20, 50, 100, 500, 1000, 5000];
+      const validLimit = validLimits.includes(limit || 100) ? (limit || 100) : 100;
+
+      const params = new URLSearchParams({
+        symbol: symbol.toUpperCase(),
+        limit: validLimit.toString(),
+      });
+
+      const response = await fetch(`https://api.binance.com/api/v3/depth?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Format orderbook data
+      const bids = data.bids.map((bid: [string, string]) => ({
+        price: parseFloat(bid[0]),
+        quantity: parseFloat(bid[1]),
+      }));
+
+      const asks = data.asks.map((ask: [string, string]) => ({
+        price: parseFloat(ask[0]),
+        quantity: parseFloat(ask[1]),
+      }));
+
+      // Calculate spread
+      const bestBid = bids[0]?.price || 0;
+      const bestAsk = asks[0]?.price || 0;
+      const spread = bestAsk - bestBid;
+      const spreadPercent = bestBid > 0 ? ((spread / bestBid) * 100).toFixed(4) : '0.0000';
+
+      return {
+        success: true,
+        symbol: symbol.toUpperCase(),
+        bids: bids,
+        asks: asks,
+        bestBid: bestBid,
+        bestAsk: bestAsk,
+        spread: spread,
+        spreadPercent: `${spreadPercent}%`,
+        lastUpdateId: data.lastUpdateId,
+        source: 'Binance API',
+        url: `https://www.binance.com/en/trade/${symbol.toUpperCase()}`,
+      };
+    } catch (error) {
+      console.error('Binance orderbook error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        symbol,
+      };
+    }
+  },
+});
+
 // Binance exchange info (get all trading pairs)
 export const binanceExchangeInfoTool = tool({
   description: 'Get exchange information including all available trading pairs, symbols, and filters on Binance.',
