@@ -29,6 +29,15 @@ import type {
   SearchMemoryTool,
   AddMemoryTool,
   codeContextTool,
+  predictionSearchTool,
+  indianStockChartTool,
+  binanceTickerTool,
+  binanceKlineTool,
+  binanceOrderbookTool,
+  binanceExchangeInfoTool,
+  growwQuoteTool,
+  growwHistoricalCandleTool,
+  growwPriceForecastTool,
 } from '@/lib/tools';
 
 import type { InferUITool, UIMessage } from 'ai';
@@ -97,9 +106,51 @@ export type DataExtremeSearchPart = {
   };
 };
 
+export type DataPredictionResultsPart = {
+  type: 'data-prediction_results';
+  data: {
+    query: string;
+    markets: Array<{
+      id: string;
+      title: string;
+      description: string;
+      url: string;
+      source: 'Polymarket' | 'Kalshi';
+      category: string | null;
+      totalVolume: number;
+      totalLiquidity?: number;
+      totalOpenInterest?: number;
+      endDate: string | null;
+      markets: Array<{
+        id: string;
+        title: string;
+        outcomes: Array<{
+          name: string;
+          probability: number;
+          price: number;
+        }>;
+        volume: number;
+        volume24h: number;
+        liquidity?: number;
+        openInterest?: number;
+        endDate: string;
+        active: boolean;
+        closed: boolean;
+      }>;
+      relevanceScore: number;
+    }>;
+    totalResults: number;
+    sources: {
+      web: number;
+      proprietary: number;
+    };
+  };
+};
+
 export const messageMetadataSchema = z.object({
   createdAt: z.string(),
   model: z.string(),
+  multiAgentMode: z.boolean().optional(),
   completionTime: z.number().nullable(),
   inputTokens: z.number().nullable(),
   outputTokens: z.number().nullable(),
@@ -135,6 +186,15 @@ type createConnectorsSearchTool = InferUITool<ReturnType<typeof createConnectors
 type createMemoryTools = InferUITool<SearchMemoryTool>;
 type addMemoryTools = InferUITool<AddMemoryTool>;
 type codeContextTool = InferUITool<typeof codeContextTool>;
+type predictionSearchTool = InferUITool<ReturnType<typeof predictionSearchTool>>;
+type indianStockChartTool = InferUITool<typeof indianStockChartTool>;
+type binanceTickerTool = InferUITool<typeof binanceTickerTool>;
+type binanceKlineTool = InferUITool<typeof binanceKlineTool>;
+type binanceOrderbookTool = InferUITool<typeof binanceOrderbookTool>;
+type binanceExchangeInfoTool = InferUITool<typeof binanceExchangeInfoTool>;
+type growwQuoteTool = InferUITool<typeof growwQuoteTool>;
+type growwHistoricalCandleTool = InferUITool<typeof growwHistoricalCandleTool>;
+type growwPriceForecastTool = InferUITool<typeof growwPriceForecastTool>;
 
 // type mcpSearchTool = InferUITool<typeof mcpSearchTool>;
 
@@ -177,6 +237,19 @@ export type ChatTools = {
   add_memory: addMemoryTools;
 
   code_context: codeContextTool;
+  prediction_search: predictionSearchTool;
+  indian_stock_chart: indianStockChartTool;
+
+  binance_ticker: binanceTickerTool;
+  binance_kline: binanceKlineTool;
+  binance_orderbook: binanceOrderbookTool;
+  binance_exchange_info: binanceExchangeInfoTool;
+  groww_quote: growwQuoteTool;
+  groww_historical_candle: growwHistoricalCandleTool;
+  groww_price_forecast: growwPriceForecastTool;
+
+  xai_web_search: webSearch;
+  xai_x_search: xSearchTool;
 };
 
 export type CustomUIDataTypes = {
@@ -192,6 +265,7 @@ export type CustomUIDataTypes = {
     imagesCount: number;
   };
   extreme_search: DataExtremeSearchPart['data'];
+  prediction_results: DataPredictionResultsPart['data'];
 };
 
 export type ChatMessage = UIMessage<MessageMetadata, CustomUIDataTypes, ChatTools>;

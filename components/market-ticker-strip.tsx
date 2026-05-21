@@ -1,0 +1,134 @@
+'use client';
+
+import React, { useEffect, useMemo, useState } from 'react';
+
+type TickerItem = {
+  id: string;
+  label: string;
+  symbol: string;
+  price: number;
+  changePct: number;
+  currency?: string;
+  source: 'yahoo' | 'binance';
+  delayed?: boolean;
+  asOf: string;
+};
+
+type TickerApiResponse = {
+  success: boolean;
+  updatedAt: string;
+  items: TickerItem[];
+};
+
+const REFRESH_MS = 30_000;
+
+function formatPrice(price: number, currency?: string) {
+  if (!Number.isFinite(price)) return '--';
+
+  const decimals = price >= 1000 ? 0 : price >= 100 ? 2 : 4;
+  if (!currency) return price.toFixed(decimals);
+
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: Math.min(decimals, 2),
+      maximumFractionDigits: decimals,
+    }).format(price);
+  } catch {
+    return price.toFixed(decimals);
+  }
+}
+
+function formatChange(changePct: number) {
+  if (!Number.isFinite(changePct)) return '--';
+  const sign = changePct > 0 ? '+' : '';
+  return `${sign}${changePct.toFixed(2)}%`;
+}
+
+export function MarketTickerStrip() {
+  const [items, setItems] = useState<TickerItem[]>([]);
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadTicker = async () => {
+      try {
+        const response = await fetch('/api/market-ticker', { cache: 'no-store' });
+        if (!response.ok) return;
+        const payload = (await response.json()) as TickerApiResponse;
+        if (!mounted || !payload?.success || !Array.isArray(payload.items)) return;
+        setItems(payload.items);
+      } catch {
+        // Leave last successful values on screen.
+      } finally {
+        if (mounted) {
+          setHasLoaded(true);
+        }
+      }
+    };
+
+    loadTicker();
+    const timer = window.setInterval(loadTicker, REFRESH_MS);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const loopedItems = useMemo(() => (items.length > 0 ? [...items, ...items] : []), [items]);
+
+  if (!hasLoaded || loopedItems.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="relative w-full overflow-hidden border-y border-border/40 bg-background/70 backdrop-blur">
+      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-background to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-background to-transparent" />
+
+      <div className="market-ticker-track flex w-max min-w-full items-center gap-8 py-2">
+        {loopedItems.map((item, index) => {
+          const isPositive = item.changePct >= 0;
+          return (
+            <div key={`${item.id}-${index}`} className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm">
+              <span className="font-semibold tracking-tight text-blue-600 dark:text-blue-400">{item.label}</span>
+              <span className="text-amber-700 dark:text-amber-300">{formatPrice(item.price, item.currency)}</span>
+              <span className={isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
+                {formatChange(item.changePct)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <style jsx>{`
+        .market-ticker-track {
+          animation: market-ticker-scroll 40s linear infinite;
+          will-change: transform;
+        }
+
+        .market-ticker-track:hover {
+          animation-play-state: paused;
+        }
+
+        @keyframes market-ticker-scroll {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-50%);
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .market-ticker-track {
+            animation: none;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}

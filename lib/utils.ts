@@ -14,6 +14,8 @@ import {
   AppleStocksIcon,
   ConnectIcon,
   CodeCircleIcon,
+  Chart03Icon,
+  IndiaGateIcon,
 } from '@hugeicons/core-free-icons';
 
 export function cn(...inputs: ClassValue[]) {
@@ -27,13 +29,17 @@ export type SearchGroupId =
   | 'youtube'
   | 'reddit'
   | 'stocks'
+  | 'ise'
   | 'chat'
   | 'extreme'
   | 'memory'
   | 'crypto'
   | 'code'
   | 'connectors'
-  | 'binance';
+  | 'binance'
+  | 'groww'
+  | 'prediction'
+  | 'multi-agent';
 
 // Search provider information for dynamic descriptions
 export const searchProviderInfo = {
@@ -80,6 +86,13 @@ export function getSearchGroups(searchProvider: SearchProvider = 'parallel') {
       name: 'Stocks',
       description: 'Stock and currency information',
       icon: AppleStocksIcon,
+      show: true,
+    },
+    {
+      id: 'ise' as const,
+      name: 'ISE',
+      description: 'NSE & BSE Indian equities (INR) with charts',
+      icon: IndiaGateIcon,
       show: true,
     },
     {
@@ -130,10 +143,10 @@ export function getSearchGroups(searchProvider: SearchProvider = 'parallel') {
     },
     {
       id: 'crypto' as const,
-      name: 'Crypto',
+      name: 'CoinGecko',
       description: 'Cryptocurrency research powered by CoinGecko',
       icon: Bitcoin02Icon,
-      show: true,
+      show: false, // UI disabled — set true to re-enable CoinGecko mode
     },
     {
       id: 'youtube' as const,
@@ -147,6 +160,27 @@ export function getSearchGroups(searchProvider: SearchProvider = 'parallel') {
       name: 'Binance',
       description: 'Get cryptocurrency prices, charts, and trading data from Binance',
       icon: Bitcoin02Icon,
+      show: true,
+    },
+    {
+      id: 'groww' as const,
+      name: 'Groww',
+      description: 'Indian market quotes and candles via Groww Trade API',
+      icon: Chart03Icon,
+      show: true,
+    },
+    {
+      id: 'prediction' as const,
+      name: 'Prediction',
+      description: 'Search prediction markets from Polymarket and Kalshi',
+      icon: Chart03Icon,
+      show: false, // UI disabled — set true to re-enable Prediction mode
+    },
+    {
+      id: 'multi-agent' as const,
+      name: 'Multi-agent',
+      description: 'High-agency research with xAI web and X search',
+      icon: AtomicPowerIcon,
       show: true,
     },
   ] as const;

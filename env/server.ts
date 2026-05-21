@@ -37,10 +37,28 @@ export const serverEnv = createEnv({
     BLOB_READ_WRITE_TOKEN: z.string().min(1),
     SMITHERY_API_KEY: z.string().min(1),
     COINGECKO_API_KEY: z.string().min(1),
+    GROWW_ACCESS_TOKEN: z.string().optional(),
+    GROWW_API_VERSION: z.string().optional().default('1.0'),
     QSTASH_TOKEN: z.string().min(1),
     RESEND_API_KEY: z.string().min(1),
     SUPERMEMORY_API_KEY: z.string().min(1),
     ALLOWED_ORIGINS: z.string().optional().default('http://localhost:3000'),
+    /** When true, `/api/widget/*` routes are active. */
+    WIDGET_ENABLED: z
+      .string()
+      .optional()
+      .default('false')
+      .transform((v) => v === 'true' || v === '1'),
+    /**
+     * JSON array: `[{ "siteKey": "uuid", "hosts": ["localhost", "example.com", "*.vercel.app"] }]`
+     * Origins must match one of `hosts` (hostname only, case-insensitive). `*.suffix` matches subdomains.
+     */
+    WIDGET_SITES_JSON: z.string().optional().default('[]'),
+    /** Upstash Vector REST endpoint for widget RAG (optional; RAG disabled if missing). */
+    WIDGET_VECTOR_REST_URL: z.string().optional(),
+    WIDGET_VECTOR_REST_TOKEN: z.string().optional(),
+    MONGODB_URI: z.string().optional().default('mongodb://localhost:27017'),
+    MONGODB_DB: z.string().optional().default('groww_market_data'),
   },
   experimental__runtimeEnv: process.env,
 });

@@ -19,11 +19,12 @@ import {
 } from 'ai';
 import { createMemoryTools } from '@/lib/tools/supermemory';
 import {
-  scira,
+  bharatX,
   shouldBypassRateLimits,
   getModelParameters,
   hasReasoningSupport,
 } from '@/ai/providers';
+import { xai } from '@ai-sdk/xai';
 import {
   createStreamId,
   getChatById,
@@ -71,6 +72,11 @@ import {
   binanceKlineTool,
   binanceOrderbookTool,
   binanceExchangeInfoTool,
+  growwQuoteTool,
+  growwHistoricalCandleTool,
+  growwPriceForecastTool,
+  predictionSearchTool,
+  indianStockChartTool,
 } from '@/lib/tools';
 import { GroqProviderOptions } from '@ai-sdk/groq';
 import { markdownJoinerTransform } from '@/lib/parser';
@@ -83,9 +89,6 @@ import { unauthenticatedRateLimit, getClientIdentifier } from '@/lib/rate-limit'
 import { CohereChatModelOptions } from '@ai-sdk/cohere';
 
 let globalStreamContext: ResumableStreamContext | null = null;
-
-// Shared config promise to avoid duplicate calls
-let configPromise: Promise<any>;
 
 export function getStreamContext() {
   if (!globalStreamContext) {
@@ -131,8 +134,10 @@ export async function POST(req: Request) {
   // Treat all users (including guests) as Pro users with full access
   const isProUser = true; // Always true - all features free for everyone
 
-  // 1. Config (needed for streaming) - start immediately
-  configPromise = getGroupConfig(group);
+  // Per-request config only — never share a module-level promise: concurrent or
+  // back-to-back POSTs would overwrite it and the wrong search mode's tools/prompt
+  // would be used (e.g. X mode getting web/stocks tools mid-chat).
+  const groupConfigPromise = getGroupConfig(group);
 
   // 2. Full user data (needed for usage checks and custom instructions)
   const fullUserPromise = lightweightUser ? getCurrentUser() : Promise.resolve(null);
@@ -223,7 +228,7 @@ export async function POST(req: Request) {
       // Wait for critical checks and config in parallel (only what's needed to start streaming)
       const [criticalResult, { tools: activeTools, instructions }, customInstructionsResult, user] = await Promise.all([
         criticalChecksPromise,
-        configPromise,
+        groupConfigPromise,
         customInstructionsPromise,
         fullUserPromise,
       ]);
@@ -256,61 +261,66 @@ export async function POST(req: Request) {
         });
       }
 
+      const shouldUseXaiMultiAgent = group === 'multi-agent';
+
       const setupTime = (Date.now() - requestStartTime) / 1000;
-      console.log(`🚀 Time to streamText: ${setupTime.toFixed(2)}s`);
+      console.log(`🚀 Time to streamText: ${setupTime.toFixed(2)}s`, shouldUseXaiMultiAgent ? '(multi-agent mode)' : '');
 
       const streamStartTime = Date.now();
 
       const result = streamText({
-        model: scira.languageModel(model),
-        messages: convertToModelMessages(messages),
-        ...getModelParameters(model),
-        stopWhen: stepCountIs(5),
+        model: shouldUseXaiMultiAgent ? xai.responses('grok-4.20-multi-agent') : bharatX.languageModel(model),
+        messages: await convertToModelMessages(messages),
+        ...getModelParameters(shouldUseXaiMultiAgent ? 'grok-4.20-multi-agent' : model),
+        stopWhen: stepCountIs(shouldUseXaiMultiAgent ? 5 : 5),
         onAbort: ({ steps }) => {
           console.log('Stream aborted after', steps.length, 'steps');
         },
         maxRetries: 10,
-        activeTools: safeActiveTools,
+        activeTools: shouldUseXaiMultiAgent ? ['xai_web_search', 'xai_x_search'] : safeActiveTools,
         experimental_transform: markdownJoinerTransform(),
         system:
           instructions +
           (customInstructions && (isCustomInstructionsEnabled ?? true)
             ? `\n\nThe user's custom instructions are as follows and YOU MUST FOLLOW THEM AT ALL COSTS: ${customInstructions?.content}`
             : '\n') +
-          (latitude && longitude ? `\n\nThe user's location is ${latitude}, ${longitude}.` : ''),
+          (latitude && longitude ? `\n\nThe user's location is ${latitude}, ${longitude}.` : '') +
+          (shouldUseXaiMultiAgent
+            ? '\n\nWhen multi-agent mode is enabled, you are operating in a high-agency research workflow. Use only the xAI server-side web search and X search tools available in this environment. Do not call any other research or search tools.\n\nYour job is to behave like a rigorous research analyst:\n- Break the request into sub-questions when useful.\n- Search broadly first, then narrow based on what you find.\n- Use multiple searches when the topic is ambiguous, fast-moving, comparative, or requires validation.\n- Cross-check important claims across multiple sources whenever possible.\n- Prefer recent and primary sources for news, releases, product changes, pricing, benchmarks, and policy updates.\n- Use X search when social signals, firsthand announcements, or fast-moving discourse are relevant.\n- Use web search when you need official documentation, articles, product pages, blogs, papers, or other published sources.\n- If both web and X are relevant, use both.\n\nOutput requirements:\n- Synthesize findings into a clear, direct answer instead of narrating every search step.\n- Be concise but complete.\n- Include uncertainty when evidence is mixed, incomplete, or time-sensitive.\n- Do not fabricate facts, sources, timelines, quotes, or consensus.\n- If you cannot verify a claim well enough, say so plainly.\n- Ground the final answer in the sources you found and make sure the answer actually reflects them.\n\nResponse structure guidelines:\n- Start with a direct answer or conclusion in 1-3 sentences.\n- Then present the most important findings as short sections or bullet points.\n- For comparative questions, explicitly compare the options point-by-point.\n- For fast-moving topics, clearly separate confirmed facts from tentative signals.\n- End with a brief takeaway, recommendation, or next step when useful.\n- Keep the response skimmable and avoid long, repetitive paragraphs.\n\nTool behavior requirements:\n- Do not mention internal tool limitations unless necessary.\n- Do not ask for permission to search.\n- Do not stop after a single weak search if the question clearly needs deeper verification.\n- Avoid redundant searches that do not add evidence.\n- Prefer quality of evidence over quantity of searches.'
+            : ''),
         toolChoice: 'auto',
         providerOptions: {
           gateway: {
             only: ['zai', 'deepseek', 'alibaba', 'baseten'],
           },
           openai: {
-            ...(model !== 'scira-qwen-coder'
+            ...(model !== 'bharatx-qwen-coder'
               ? {
                 parallelToolCalls: false,
               }
               : {}),
-            ...((model === 'scira-gpt5' ||
-              model === 'scira-gpt5-mini' ||
-              model === 'scira-o3' ||
-              model === 'scira-gpt5-nano' ||
-              model === 'scira-gpt5-codex' ||
-              model === 'scira-gpt5-medium' ||
-              model === 'scira-o4-mini' ||
-              model === 'scira-gpt-4.1' ||
-              model === 'scira-gpt-4.1-mini' ||
-              model === 'scira-gpt-4.1-nano'
+            ...((model === 'bharatx-gpt5' ||
+              model === 'bharatx-gpt5-mini' ||
+              model === 'bharatx-o3' ||
+              model === 'bharatx-gpt5-nano' ||
+              model === 'bharatx-gpt5-codex' ||
+              model === 'bharatx-gpt5-medium' ||
+              model === 'bharatx-o4-mini' ||
+              model === 'bharatx-gpt-4.1' ||
+              model === 'bharatx-gpt-4.1-mini' ||
+              model === 'bharatx-gpt-4.1-nano'
               ? {
                 reasoningEffort: (
-                  model === 'scira-gpt5-nano' ||
-                    model === 'scira-gpt5' ||
-                    model === 'scira-gpt5-mini' ?
+                  model === 'bharatx-gpt5-nano' ||
+                    model === 'bharatx-gpt5' ||
+                    model === 'bharatx-gpt5-mini' ?
                     'minimal' :
                     'medium'
                 ),
-                promptCacheKey: 'scira-oai',
+                promptCacheKey: 'bharatx-oai',
                 parallelToolCalls: false,
                 reasoningSummary: 'detailed',
-                textVerbosity: (model === 'scira-o3' || model === 'scira-gpt5-codex' || model === 'scira-o4-mini' || model === 'scira-gpt-4.1' || model === 'scira-gpt-4.1-mini' || model === 'scira-gpt-4.1-nano' ? 'medium' : 'high'),
+                textVerbosity: (model === 'bharatx-o3' || model === 'bharatx-gpt5-codex' || model === 'bharatx-o4-mini' || model === 'bharatx-gpt-4.1' || model === 'bharatx-gpt-4.1-mini' || model === 'bharatx-gpt-4.1-nano' ? 'medium' : 'high'),
               }
               : {}) satisfies OpenAIResponsesProviderOptions),
           },
@@ -318,13 +328,13 @@ export async function POST(req: Request) {
             parallelToolCalls: false,
           },
           groq: {
-            ...(model === 'scira-gpt-oss-20' || model === 'scira-gpt-oss-120'
+            ...(model === 'bharatx-gpt-oss-20' || model === 'bharatx-gpt-oss-120'
               ? {
                 reasoningEffort: 'high',
                 reasoningFormat: 'hidden',
               }
               : {}),
-            ...(model === 'scira-qwen-32b'
+            ...(model === 'bharatx-qwen-32b'
               ? {
                 reasoningEffort: 'none',
               }
@@ -333,11 +343,18 @@ export async function POST(req: Request) {
             structuredOutputs: true,
             serviceTier: 'auto',
           } satisfies GroqProviderOptions,
-          xai: {
-            parallel_tool_calls: false,
-          },
+          xai: shouldUseXaiMultiAgent
+            ? {
+                reasoningEffort: 'high',
+                parallel_function_calling: true,
+                parallel_tool_calls: true,
+                parallelToolCalls: true,
+              }
+            : {
+                parallel_tool_calls: false,
+              },
           cohere: {
-            ...(model === 'scira-cmd-a-think'
+            ...(model === 'bharatx-cmd-a-think'
               ? {
                 thinking: {
                   type: 'enabled',
@@ -347,7 +364,7 @@ export async function POST(req: Request) {
               : {}),
           } satisfies CohereChatModelOptions,
           anthropic: {
-            ...(model === 'scira-anthropic-think'
+            ...(model === 'bharatx-anthropic-think'
               ? {
                 sendReasoning: true,
                 thinking: {
@@ -359,7 +376,7 @@ export async function POST(req: Request) {
             disableParallelToolUse: true,
           } satisfies AnthropicProviderOptions,
           google: {
-            ...(model === 'scira-google-think' || model === 'scira-google-pro-think'
+            ...(model === 'bharatx-google-think' || model === 'bharatx-google-pro-think'
               ? {
                 thinkingConfig: {
                   thinkingBudget: 400,
@@ -371,6 +388,14 @@ export async function POST(req: Request) {
           } satisfies GoogleGenerativeAIProviderOptions,
         },
         prepareStep: async ({ steps, messages }) => {
+          // Multi-agent mode: keep tools available across all steps
+          if (shouldUseXaiMultiAgent) {
+            return {
+              toolChoice: 'auto' as const,
+              activeTools: ['xai_web_search', 'xai_x_search'],
+            };
+          }
+
           // Calculate total token usage across all steps
           const totalTokens = steps.reduce((sum, step) => sum + (step.usage?.totalTokens ?? 0), 0);
 
@@ -382,8 +407,6 @@ export async function POST(req: Request) {
 
           let prunedMessages = messages;
           
-          // If model doesn't support reasoning, always prune ALL reasoning content
-          // to prevent errors when switching from reasoning to non-reasoning models
           if (!modelHasReasoning) {
             prunedMessages = pruneMessages({
               messages,
@@ -393,7 +416,6 @@ export async function POST(req: Request) {
             });
             console.log(`🧹 Removed reasoning content for non-reasoning model (${messages.length} → ${prunedMessages.length} messages)`);
           } else if (shouldPrune) {
-            // For reasoning models, only prune when needed
             console.log(`🔧 Pruning messages: ${messages.length} messages, ${totalTokens} tokens used`);
             prunedMessages = pruneMessages({
               messages,
@@ -406,7 +428,6 @@ export async function POST(req: Request) {
           if (steps.length > 0) {
             const lastStep = steps[steps.length - 1];
 
-            // If tools were called and results are available, disable further tool calls
             if (lastStep.toolCalls.length > 0 && lastStep.toolResults.length > 0) {
               return {
                 toolChoice: 'none',
@@ -416,12 +437,12 @@ export async function POST(req: Request) {
             }
           }
 
-          // Return pruned messages if needed
           return (!modelHasReasoning || shouldPrune) ? { messages: prunedMessages } : undefined;
         },
         tools: (() => {
           const baseTools = {
             stock_chart: stockChartTool,
+            indian_stock_chart: indianStockChartTool,
             currency_converter: currencyConverterTool,
             coin_data: coinDataTool,
             coin_data_by_contract: coinDataByContractTool,
@@ -431,6 +452,9 @@ export async function POST(req: Request) {
             binance_kline: binanceKlineTool,
             binance_orderbook: binanceOrderbookTool,
             binance_exchange_info: binanceExchangeInfoTool,
+            groww_quote: growwQuoteTool,
+            groww_historical_candle: growwHistoricalCandleTool,
+            groww_price_forecast: growwPriceForecastTool,
 
             x_search: xSearchTool,
             web_search: webSearchTool(dataStream, searchProvider),
@@ -454,15 +478,24 @@ export async function POST(req: Request) {
             extreme_search: extremeSearchTool(dataStream),
             greeting: greetingTool(timezone),
             code_context: codeContextTool,
+            prediction_search: predictionSearchTool(dataStream),
           };
 
+          const toolsWithXai = shouldUseXaiMultiAgent
+            ? {
+                ...baseTools,
+                xai_web_search: xai.tools.webSearch(),
+                xai_x_search: xai.tools.xSearch(),
+              }
+            : baseTools;
+
           if (!user) {
-            return baseTools;
+            return toolsWithXai;
           }
 
           const memoryTools = createMemoryTools(user.id);
           return {
-            ...baseTools,
+            ...toolsWithXai,
             search_memories: memoryTools.searchMemories as any,
             add_memory: memoryTools.addMemory as any,
             connectors_search: createConnectorsSearchTool(user.id, selectedConnectors),
@@ -486,7 +519,7 @@ export async function POST(req: Request) {
           }
 
           const { object: repairedArgs } = await generateObject({
-            model: scira.languageModel('scira-grok-4-fast'),
+            model: bharatX.languageModel('bharatx-grok-4-fast'),
             schema: tool.inputSchema,
             prompt: [
               `The model tried to call the tool "${toolCall.toolName}"` + ` with the following arguments:`,
@@ -552,27 +585,41 @@ export async function POST(req: Request) {
         },
       });
 
-      result.consumeStream();
-
       dataStream.merge(
         result.toUIMessageStream({
           sendReasoning: true,
+          sendSources: shouldUseXaiMultiAgent,
           messageMetadata: ({ part }) => {
             if (part.type === 'finish') {
               console.log('Finish part: ', part);
               const processingTime = (Date.now() - streamStartTime) / 1000;
               return {
                 model: model as string,
-                completionTime: processingTime,
                 createdAt: new Date().toISOString(),
+                multiAgentMode: shouldUseXaiMultiAgent,
+                completionTime: processingTime,
                 totalTokens: part.totalUsage?.totalTokens ?? null,
                 inputTokens: part.totalUsage?.inputTokens ?? null,
                 outputTokens: part.totalUsage?.outputTokens ?? null,
               };
             }
+
+            return {
+              model: model as string,
+              createdAt: new Date().toISOString(),
+              multiAgentMode: shouldUseXaiMultiAgent,
+              completionTime: null,
+              inputTokens: null,
+              outputTokens: null,
+              totalTokens: null,
+            };
           },
         }),
       );
+
+      // Consume the original stream after we've attached it to the UI stream.
+      // This prevents intermittent undefined chunks during piping.
+      result.consumeStream();
     },
     onError(error) {
       console.log('Error: ', error);

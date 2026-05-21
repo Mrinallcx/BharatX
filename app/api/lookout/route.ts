@@ -1,7 +1,7 @@
 // /app/api/lookout/route.ts
 import { generateTitleFromUserMessage } from '@/app/actions';
 import { convertToModelMessages, streamText, createUIMessageStream, stepCountIs, JsonToSseTransformStream } from 'ai';
-import { scira } from '@/ai/providers';
+import { bharatX } from '@/ai/providers';
 import {
   createStreamId,
   saveChat,
@@ -23,13 +23,378 @@ import { db } from '@/lib/db';
 import { subscription, payment } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 
-// Import extreme search tool
-import { extremeSearchTool } from '@/lib/tools';
+import {
+  extremeSearchTool,
+  webSearchTool,
+  academicSearchTool,
+  youtubeSearchTool,
+  redditSearchTool,
+  stockChartTool,
+  indianStockChartTool,
+  currencyConverterTool,
+  coinDataTool,
+  coinOhlcTool,
+  coinDataByContractTool,
+  codeContextTool,
+  xSearchTool,
+  datetimeTool,
+  greetingTool,
+  retrieveTool,
+  weatherTool,
+  codeInterpreterTool,
+  findPlaceOnMapTool,
+  nearbyPlacesSearchTool,
+  flightTrackerTool,
+  movieTvSearchTool,
+  trendingMoviesTool,
+  trendingTvTool,
+  textTranslateTool,
+  predictionSearchTool,
+  binanceTickerTool,
+  binanceKlineTool,
+  binanceOrderbookTool,
+  growwQuoteTool,
+  growwHistoricalCandleTool,
+  growwPriceForecastTool,
+} from '@/lib/tools';
 import { ChatMessage } from '@/lib/types';
+import { type UIMessageStreamWriter } from 'ai';
 
-// Helper function to check if a user is pro by userId
+function truncateMarkdown(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  const softLimit = Math.min(text.length, maxLength + 400);
+  let cutIndex = maxLength;
+
+  const nextNewlineIndex = text.indexOf('\n\n', cutIndex);
+  if (nextNewlineIndex !== -1 && nextNewlineIndex <= softLimit) {
+    cutIndex = nextNewlineIndex;
+  } else {
+    const sentenceEnd = text.lastIndexOf('. ', cutIndex);
+    if (sentenceEnd > maxLength - 200) cutIndex = sentenceEnd + 1;
+  }
+
+  return text.slice(0, cutIndex).trimEnd();
+}
+
+const STATIC_TOOLS: Record<string, any> = {
+  youtube_search: youtubeSearchTool,
+  stock_chart: stockChartTool,
+  indian_stock_chart: indianStockChartTool,
+  currency_converter: currencyConverterTool,
+  coin_data: coinDataTool,
+  coin_ohlc: coinOhlcTool,
+  coin_data_by_contract: coinDataByContractTool,
+  code_context: codeContextTool,
+  datetime: datetimeTool,
+  greeting: greetingTool,
+  retrieve: retrieveTool,
+  get_weather_data: weatherTool,
+  code_interpreter: codeInterpreterTool,
+  find_place_on_map: findPlaceOnMapTool,
+  nearby_places_search: nearbyPlacesSearchTool,
+  track_flight: flightTrackerTool,
+  movie_or_tv_search: movieTvSearchTool,
+  trending_movies: trendingMoviesTool,
+  trending_tv: trendingTvTool,
+  text_translate: textTranslateTool,
+  binance_ticker: binanceTickerTool,
+  binance_kline: binanceKlineTool,
+  binance_orderbook: binanceOrderbookTool,
+  groww_quote: growwQuoteTool,
+  groww_historical_candle: growwHistoricalCandleTool,
+  groww_price_forecast: growwPriceForecastTool,
+  academic_search: academicSearchTool,
+  reddit_search: redditSearchTool,
+  x_search: xSearchTool,
+};
+
+const DATASTREAM_TOOL_FACTORIES: Record<string, (dataStream: UIMessageStreamWriter<ChatMessage>) => any> = {
+  extreme_search: (dataStream) => extremeSearchTool(dataStream),
+  web_search: (dataStream) => webSearchTool(dataStream),
+  prediction_search: (dataStream) => predictionSearchTool(dataStream),
+};
+
+const SEARCH_MODE_TOOLS: Record<string, readonly string[]> = {
+  extreme: ['extreme_search'],
+  web: [
+    'web_search',
+    'greeting',
+    'code_interpreter',
+    'get_weather_data',
+    'retrieve',
+    'text_translate',
+    'nearby_places_search',
+    'track_flight',
+    'movie_or_tv_search',
+    'trending_movies',
+    'find_place_on_map',
+    'trending_tv',
+    'datetime',
+  ],
+  academic: ['academic_search', 'code_interpreter', 'datetime'],
+  youtube: ['youtube_search', 'datetime'],
+  reddit: ['reddit_search', 'datetime'],
+  github: ['extreme_search'],
+  stocks: ['stock_chart', 'currency_converter', 'datetime'],
+  ise: ['indian_stock_chart', 'currency_converter', 'datetime'],
+  groww: ['groww_quote', 'groww_historical_candle', 'groww_price_forecast', 'datetime'],
+  code: ['code_context'],
+  x: ['x_search'],
+  chat: [],
+  finagent: [
+    'extreme_search',
+    'coin_data',
+    'coin_ohlc',
+    'coin_data_by_contract',
+    'stock_chart',
+    'currency_converter',
+    'code_interpreter',
+    'prediction_search',
+    'web_search',
+    'x_search',
+    'reddit_search',
+    'binance_ticker',
+    'binance_kline',
+    'groww_quote',
+    'groww_historical_candle',
+    'datetime',
+  ],
+};
+
+function getToolsForSearchMode(
+  searchMode: string,
+  dataStream: UIMessageStreamWriter<ChatMessage>,
+): Record<string, any> {
+  const toolNames = SEARCH_MODE_TOOLS[searchMode] || SEARCH_MODE_TOOLS.extreme;
+  const tools: Record<string, any> = {};
+
+  for (const toolName of toolNames) {
+    if (toolName in DATASTREAM_TOOL_FACTORIES) {
+      tools[toolName] = DATASTREAM_TOOL_FACTORIES[toolName](dataStream);
+    } else if (toolName in STATIC_TOOLS) {
+      tools[toolName] = STATIC_TOOLS[toolName];
+    }
+  }
+
+  return tools;
+}
+
+function getSystemPromptForSearchMode(searchMode: string): string {
+  const today = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    weekday: 'short',
+  });
+
+  const toolNamesForMode = SEARCH_MODE_TOOLS[searchMode] || SEARCH_MODE_TOOLS.extreme;
+  const primaryToolName = toolNamesForMode[0];
+  const isFinAgent = searchMode === 'finagent';
+
+  const basePrompt = `# BharatX Scheduled Research Assistant
+
+You are an advanced research assistant focused on deep analysis and comprehensive understanding, with a focus on being backed by citations.
+
+**Today's Date:** ${today}
+
+---
+
+## CRITICAL OPERATION RULES
+
+### Immediate Tool Execution
+${isFinAgent
+    ? `- **MANDATORY**: Start executing tools IMMEDIATELY — use MULTIPLE tools in sequence to build the report
+- **NO PRE-ANALYSIS**: Do NOT write any text before running the first tool
+- **MULTI-TOOL REQUIRED**: FinAgent runs MUST use at least 3 tools — market data, prediction markets, and sentiment/analysis
+- **NO CLARIFICATION**: Never ask for clarification - make best interpretation and proceed
+- **DIRECT ANSWERS**: Go straight to answering after running the tools`
+    : `- **MANDATORY**: ${primaryToolName ? `Run \`${primaryToolName}\` INSTANTLY when processing ANY scheduled query` : 'Do NOT call tools unless required by the user'} - NO EXCEPTIONS
+- **NO PRE-ANALYSIS**: Do NOT write any text before running the tool (if a tool is required)
+- **ONE TOOL ONLY**: Run the tool once and only once per scheduled search
+- **NO CLARIFICATION**: Never ask for clarification - make best interpretation and proceed
+- **DIRECT ANSWERS**: Go straight to answering after running the tool`
+  }
+
+### Response Format Requirements
+- **MANDATORY**: Always respond with markdown format
+- **CITATIONS REQUIRED**: EVERY factual claim MUST have a citation
+- **IMMEDIATE CITATIONS**: Citations must appear immediately after each sentence with factual content
+- **NO END CITATIONS**: Never put citations at the end of paragraphs/sections
+- **STRICT MARKDOWN**: All responses must use proper markdown formatting throughout
+
+### Response Structure - MANDATORY
+- **CRITICAL**: ALWAYS start your response with "## Key Points" followed by a bulleted list of main findings
+- **MINIMUM REQUIRED**: The "## Key Points" section MUST contain at least 10 bullet points
+- After Key Points, write well formatted super detailed sections and finish with a conclusion
+
+## CITATION FORMAT - CRITICAL RULES
+
+### Link Formatting (MANDATORY)
+- **USE INLINE TEXT CITATIONS**: Citations must use markdown link format with text as display text
+- **FORMAT**: \`[text](url)\`
+- **NO NUMBERED FOOTNOTES**: Never use [1], [2], [3] style references
+- **NO REFERENCE SECTIONS**: Never create separate "References", "Sources", or "Links" sections
+- **INLINE ONLY**: Citations must appear immediately after the sentence they support
+- **NO BARE URLs**: Never include bare URLs`;
+
+  const modeInstructions: Record<string, string> = {
+    extreme: `
+
+## TOOL GUIDELINES
+
+### Extreme Search Tool
+- **Purpose**: Multi-step research planning with parallel web and academic searches
+- **Output**: Comprehensive 3-page research paper with citations`,
+    web: `
+
+## TOOL GUIDELINES
+
+### Web Search Tool
+- **Purpose**: Search across the web for relevant information
+- **Output**: Well-structured summary with citations from web sources`,
+    academic: `
+
+## TOOL GUIDELINES
+
+### Academic Search Tool
+- **Purpose**: Search academic papers and research publications
+- **Output**: Academic summary with proper citations from research sources`,
+    youtube: `
+
+## TOOL GUIDELINES
+
+### YouTube Search Tool
+- **Purpose**: Search YouTube videos for relevant content
+- **Output**: Summary of video content with links to relevant videos`,
+    reddit: `
+
+## TOOL GUIDELINES
+
+### Reddit Search Tool - MULTI-QUERY FORMAT REQUIRED
+- **MANDATORY**: ALWAYS use MULTIPLE QUERIES (3-5 queries) in ARRAY FORMAT
+- **FORMAT**: Use queries: ["query1", "query2", "query3"]
+- When searching Reddit, set maxResults array to at least [10, 10, 10]`,
+    github: `
+
+## TOOL GUIDELINES
+
+### GitHub Search
+- **Purpose**: Search GitHub repositories and code
+- **Output**: Summary of repositories with descriptions and metadata`,
+    stocks: `
+
+## TOOL GUIDELINES
+
+### Stock Chart Tool
+- **Purpose**: Get stock market data and charts
+- **Output**: Stock analysis with current prices and trends`,
+    ise: `
+
+## TOOL GUIDELINES
+
+### Indian Stock Chart Tool (indian_stock_chart)
+- **Purpose**: NSE/BSE equities in INR via Yahoo Finance (.NS / .BO)
+- **MANDATORY**: Use for any Indian company or index comparison on Indian exchanges
+- **DO NOT** use \`stock_chart\` — use \`indian_stock_chart\` only
+- **Output**: Price history chart + narrative in INR`,
+    groww: `
+
+## TOOL GUIDELINES
+
+### Groww Trade API Tools
+- **\`groww_quote\`**: Live quote snapshot for an Indian market instrument
+- **\`groww_historical_candle\`**: Historical OHLC candles by date range
+- **\`groww_price_forecast\`**: Model-based future scenario projection from historical candles
+- Use exchange/segment carefully:
+  - Equities/index cash: NSE or BSE + CASH
+  - Derivatives: NFO + FNO
+  - Commodities: MCX + COMMODITY`,
+    code: `
+
+## TOOL GUIDELINES
+
+### Code Context Tool
+- **Purpose**: Retrieve technical context about languages/frameworks/libraries
+- **Output**: Technical explanation with concrete code examples`,
+    x: `
+
+## TOOL GUIDELINES
+
+### X Search Tool - MULTI-QUERY FORMAT REQUIRED
+- **MANDATORY**: ALWAYS use MULTIPLE QUERIES (3-5 queries) in ARRAY FORMAT
+- **FORMAT**: Use queries: ["query1", "query2", "query3"]
+- **NATURAL LANGUAGE ONLY**: Write queries in natural language
+- **NO TWITTER SYNTAX**: NEVER use Twitter search syntax like "from:handle"
+- **EXTRACT HANDLES SEPARATELY**: Use includeXHandles parameter for handles`,
+    chat: `
+
+## TOOL GUIDELINES
+
+### Chat Mode
+- **Purpose**: Respond directly without tool usage
+- **Output**: Helpful, concise answer in markdown`,
+    finagent: `
+
+## FINAGENT — FINANCE & CRYPTO INTELLIGENCE MODE
+
+You are a professional crypto and financial intelligence analyst. Produce institutional-grade research briefs by combining live market data, on-chain intelligence, prediction market signals, social sentiment, and quantitative code execution.
+
+### Available Tools & When to Use Each
+
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| \`coin_data\` | Live CoinGecko price, market cap, volume | For any named crypto asset |
+| \`coin_ohlc\` | OHLC candlestick data for charting | For price history, technical analysis |
+| \`coin_data_by_contract\` | Token lookup by contract address | For new/unknown tokens, DeFi research |
+| \`stock_chart\` | Equities OHLC, earnings, financials | For stocks, crypto-adjacent equities |
+| \`currency_converter\` | Live forex + crypto conversion rates | For macro backdrop |
+| \`prediction_search\` | Polymarket + Kalshi live market odds | For event probabilities |
+| \`code_interpreter\` | Python sandbox execution | For quantitative analysis |
+| \`web_search\` | Financial news and research | For recent news |
+| \`x_search\` | Real-time X/Twitter social sentiment | For narrative tracking |
+| \`reddit_search\` | Community sentiment on Reddit | For crypto community sentiment |
+| \`extreme_search\` | Deep multi-source research | For thorough research |
+| \`binance_ticker\` | Live Binance spot prices | For real-time exchange data |
+| \`binance_kline\` | Binance candlestick/OHLC data | For exchange-level charts |
+| \`groww_quote\` | Live NSE/BSE/F&O quote snapshot | For Indian market live quote checks |
+| \`groww_historical_candle\` | Historical candles for Indian symbols | For trend analysis on Groww instruments |
+| \`datetime\` | Current date/time | For timestamping reports |
+
+### Tool Orchestration Strategy — CRITICAL
+- **USE MULTIPLE TOOLS**: FinAgent briefs require combining AT LEAST 3 tools per run
+- **SEQUENCE MATTERS**: Run data tools first, then analysis tools, then synthesis
+- **PREDICTION MARKETS ALWAYS**: Every FinAgent run MUST query prediction markets
+
+### Output Structure — MANDATORY
+
+\`\`\`
+## Key Points
+- [10+ bullet points with the most critical findings, each with citation]
+
+## Market Data
+[Live prices, OHLC summary, notable moves]
+
+## Prediction Market Signals
+[Active prediction market odds for relevant events]
+
+## Social & Narrative Intelligence
+[X/Twitter + Reddit sentiment summary]
+
+## Quantitative Analysis
+[Python code output: returns, correlations, EV calculations]
+
+## Risk & Outlook
+[Forward-looking synthesis: catalysts, risks, key dates]
+\`\`\`
+
+### Financial Disclaimer
+- Always include: *This report is for informational purposes only and does not constitute financial advice.*`,
+  };
+
+  return basePrompt + (modeInstructions[searchMode] || modeInstructions.extreme);
+}
+
 async function checkUserIsProById(userId: string): Promise<boolean> {
-  // All users (including guests) have Pro access - all features free
   return true;
 }
 
@@ -69,7 +434,6 @@ export async function POST(req: Request) {
     console.log('Prompt:', prompt);
     console.log('--------------------------------');
 
-    // Verify lookout exists and get details with retry logic
     let lookout: any = null;
     let retryCount = 0;
     const maxRetries = 3;
@@ -79,8 +443,9 @@ export async function POST(req: Request) {
       if (!lookout) {
         retryCount++;
         if (retryCount < maxRetries) {
-          console.log(`Lookout not found on attempt ${retryCount}, retrying in ${retryCount * 500}ms...`);
-          await new Promise((resolve) => setTimeout(resolve, retryCount * 500)); // Exponential backoff
+          const delay = 500 * Math.pow(2, retryCount - 1);
+          console.log(`Lookout not found on attempt ${retryCount}, retrying in ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
@@ -90,25 +455,21 @@ export async function POST(req: Request) {
       return new Response('Lookout not found', { status: 404 });
     }
 
-    // Get user details
     const userResult = await getUserById(userId);
     if (!userResult) {
       console.error('User not found:', userId);
       return new Response('User not found', { status: 404 });
     }
 
-    // Check if user is pro (lookouts are a pro feature)
     const isUserPro = await checkUserIsProById(userId);
     if (!isUserPro) {
       console.error('User is not pro, cannot run lookout:', userId);
       return new Response('Lookouts require a Pro subscription', { status: 403 });
     }
 
-    // Generate a new chat ID for this scheduled search
     const chatId = uuidv7();
     const streamId = 'stream-' + uuidv7();
 
-    // Create the chat
     await saveChat({
       id: chatId,
       userId: userResult.id,
@@ -116,7 +477,6 @@ export async function POST(req: Request) {
       visibility: 'private',
     });
 
-    // Create user message
     const userMessage = {
       id: uuidv7(),
       role: 'user' as const,
@@ -125,7 +485,6 @@ export async function POST(req: Request) {
       experimental_attachments: [],
     };
 
-    // Save user message and create stream ID
     await Promise.all([
       saveMessages({
         messages: [
@@ -147,211 +506,35 @@ export async function POST(req: Request) {
       createStreamId({ streamId, chatId }),
     ]);
 
-    // Set lookout status to running
     await updateLookoutStatus({
       id: lookoutId,
       status: 'running',
     });
 
-    // Create data stream with execute function
+    const searchMode = lookout.searchMode || 'extreme';
+    console.log('🔍 Using search mode:', searchMode);
+
     const stream = createUIMessageStream<ChatMessage>({
       execute: async ({ writer: dataStream }) => {
         const streamStartTime = Date.now();
 
-        // Start streaming
+        const tools = getToolsForSearchMode(searchMode, dataStream);
+        const activeToolNames = Object.keys(tools);
+        const systemPrompt = getSystemPromptForSearchMode(searchMode);
+
+        console.log('🛠️ Active tools:', activeToolNames);
+
+        const maxSteps = searchMode === 'finagent' ? 8 : 2;
+
         const result = streamText({
-          model: scira.languageModel('bharatx-grok-4-fast-think'),
-          messages: convertToModelMessages([userMessage]),
-          stopWhen: stepCountIs(2),
+          model: bharatX.languageModel('bharatx-grok-4-fast-think'),
+          messages: await convertToModelMessages([userMessage]),
+          stopWhen: stepCountIs(maxSteps),
           maxRetries: 10,
-          activeTools: ['extreme_search'],
-          system: `# Scira AI Scheduled Research Assistant
-
-You are an advanced research assistant focused on deep analysis and comprehensive understanding with focus to be backed by citations in a 3-page research paper format.
-
-**Today's Date:** ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', weekday: 'short' })}
-
----
-
-## 🚨 CRITICAL OPERATION RULES
-
-### Immediate Tool Execution
-- ⚠️ **MANDATORY**: Run extreme_search tool INSTANTLY when processing ANY scheduled query - NO EXCEPTIONS
-- ⚠️ **NO PRE-ANALYSIS**: Do NOT write any text before running the tool
-- ⚠️ **ONE TOOL ONLY**: Run the tool once and only once per scheduled search
-- ⚠️ **NO CLARIFICATION**: Never ask for clarification - make best interpretation and run immediately
-- ⚠️ **DIRECT ANSWERS**: Go straight to answering after running the tool
-- ⚠️ **NO PREFACES**: Never begin with "I'm assuming..." or "Based on your query..."
-
-### Response Format Requirements
-- ⚠️ **MANDATORY**: Always respond with markdown format
-- ⚠️ **CITATIONS REQUIRED**: EVERY factual claim, statistic, data point, or assertion MUST have a citation
-- ⚠️ **ZERO TOLERANCE**: No unsupported claims allowed - if no citation available, don't make the claim
-- ⚠️ **IMMEDIATE CITATIONS**: Citations must appear immediately after each sentence with factual content
-- ⚠️ **STRICT MARKDOWN**: All responses must use proper markdown formatting throughout
-
----
-
-## 🛠️ TOOL GUIDELINES
-
-### Extreme Search Tool
-- **Purpose**: Multi-step research planning with parallel web and academic searches
-- **Capabilities**:
-  - Autonomous research planning
-    - Parallel web and academic searches
-    - Deep analysis of findings
-    - Cross-referencing and validation
-- ⚠️ **MANDATORY**: Run the tool FIRST before any response
-- ⚠️ **ONE TIME ONLY**: Run the tool once and only once, then write the response
-- ⚠️ **NO PRE-ANALYSIS**: Do NOT write any analysis before running the tool
-
----
-
-## 📝 RESPONSE GUIDELINES
-
-### Content Requirements
-- **Format**: Always use markdown format
-- **Detail**: Extremely comprehensive, well-structured responses in 3-page research paper format
-- **Structure**: Use markdown formatting with headers, tables, and proper hierarchy
-- **Focus**: Address the question directly with deep analysis and synthesis
-- **Language**: Maintain the language of the user's message and do not change it
-
-### Response Format - MANDATORY STRUCTURE
-- ⚠️ **CRITICAL**: ALWAYS start your response with "## Key Points" heading followed by a bulleted list of the main findings
-  - After the key points, proceed with detailed sections and finally a conclusion
-  - Keep it super detailed and long, do not skip any important details
-  - It is very important to have citations for all facts provided
-  - Be very specific, detailed and even technical in the response
-  - Include equations and mathematical expressions in the response if needed
-  - Present findings in a logical flow
-  - Support claims with multiple sources
-  - Each section should have 2-4 detailed paragraphs
-  - CITATIONS SHOULD BE ON EVERYTHING YOU SAY
-  - Include analysis of reliability and limitations
-
-### Citation Rules - STRICT ENFORCEMENT
-- ⚠️ **MANDATORY**: EVERY SINGLE factual claim, statistic, data point, or assertion MUST have a citation
-- ⚠️ **IMMEDIATE PLACEMENT**: Citations go immediately after the sentence containing the information
-- ⚠️ **NO EXCEPTIONS**: Even obvious facts need citations
-- ⚠️ **ZERO TOLERANCE FOR END CITATIONS**: NEVER put citations at the end of responses, paragraphs, or sections
-- ⚠️ **SENTENCE-LEVEL INTEGRATION**: Each sentence with factual content must have its own citation immediately after
-- ⚠️ **GROUPED CITATIONS ALLOWED**: Multiple citations can be grouped together when supporting the same statement
-- ⚠️ **NATURAL INTEGRATION**: Don't say "according to [Source]" or "as stated in [Source]"
-- ⚠️ **FORMAT**: [Source Title](URL) with descriptive, specific source titles
-- ⚠️ **MULTIPLE SOURCES**: For claims supported by multiple sources, use format: [Source 1](URL1) [Source 2](URL2)
-- ⚠️ **YEAR REQUIREMENT**: Always include year when citing statistics, data, or time-sensitive information
-- ⚠️ **NO UNSUPPORTED CLAIMS**: If you cannot find a citation, do not make the claim
-- ⚠️ **READING FLOW**: Citations must not interrupt the natural flow of reading
-
-### UX and Reading Flow Requirements
-- ⚠️ **IMMEDIATE CONTEXT**: Citations must appear right after the statement they support
-- ⚠️ **NO SCANNING REQUIRED**: Users should never have to scan to the end to find citations
-- ⚠️ **SEAMLESS INTEGRATION**: Citations should feel natural and not break the reading experience
-- ⚠️ **SENTENCE COMPLETION**: Each sentence should be complete with its citation before moving to the next
-- ⚠️ **NO CITATION HUNTING**: Users should never have to hunt for which citation supports which claim
-
-**STRICT Citation Examples:**
-
-**✅ CORRECT - Immediate Citation Placement:**
-The global AI market is projected to reach $1.8 trillion by 2030 [AI Market Forecast 2025](https://example.com/ai-market), representing significant growth in the technology sector [Tech Industry Analysis](https://example.com/tech-growth). Recent advances in transformer architectures have enabled models to achieve 95% accuracy on complex reasoning tasks [Deep Learning Advances 2025](https://example.com/dl-advances).
-
-**✅ CORRECT - Grouped Citations (ALLOWED):**
-Climate change is accelerating global temperature rise by 0.2°C per decade [IPCC Report 2025](https://example.com/ipcc) [NASA Climate Data](https://example.com/nasa-climate) [NOAA Temperature Analysis](https://example.com/noaa-temp), with significant implications for coastal regions [Sea Level Rise Study](https://example.com/sea-level).
-
-**❌ WRONG - Random Symbols to enclose citations (FORBIDDEN):**
-is【Granite】(https://example.com/granite)
-
-**❌ WRONG - End Citations (FORBIDDEN):**
-AI is transforming industries. Quantum computing shows promise. (No citations)
-
-**FORBIDDEN Citation Practices - ZERO TOLERANCE:**
-- ❌ **NO END CITATIONS**: NEVER put citations at the end of responses, paragraphs, or sections - creates terrible UX
-- ❌ **NO END GROUPED CITATIONS**: Never group citations at end of paragraphs or responses - breaks reading flow
-- ❌ **NO SECTIONS**: Absolutely NO sections named "Additional Resources", "Further Reading", "Useful Links", "References", "Citations", "Sources"
-- ❌ **NO LINK LISTS**: No bullet points, numbered lists, or grouped links under any heading
-- ❌ **NO GENERIC LINKS**: No "You can learn more here [link]" or "See this article [link]"
-- ❌ **NO HR TAGS**: Never use horizontal rules in markdown
-- ❌ **NO UNSUPPORTED STATEMENTS**: Never make claims without immediate citations
-- ❌ **NO VAGUE SOURCES**: Never use generic titles like "Source 1", "Article", "Report"
-
-### Markdown Formatting - STRICT ENFORCEMENT
-
-#### Required Structure Elements
-- ⚠️ **HEADERS**: Use proper header hierarchy (## ### #### ##### ######) - NEVER use # (h1)
-- ⚠️ **LISTS**: Use bullet points (-) or numbered lists (1.) for all lists
-- ⚠️ **TABLES**: Use proper markdown table syntax with | separators
-- ⚠️ **CODE BLOCKS**: Use \`\`\`language for code blocks, \`code\` for inline code
-- ⚠️ **BOLD/ITALIC**: Use **bold** and *italic* for emphasis
-- ⚠️ **LINKS**: Use [text](URL) format for all links
-
-#### Mandatory Formatting Rules
-- ⚠️ **CONSISTENT HEADERS**: Use ## for main sections, ### for subsections
-- ⚠️ **PROPER LISTS**: Always use - for bullet points, 1. for numbered lists
-- ⚠️ **TABLE STRUCTURE**: Use | Header | Header | format with alignment
-- ⚠️ **LINK FORMAT**: [Descriptive Text](URL) - never bare URLs
-- ⚠️ **EMPHASIS**: Use **bold** for important terms, *italic* for emphasis
-
-#### Forbidden Formatting Practices
-- ❌ **NO PLAIN TEXT**: Never use plain text for lists or structure
-- ❌ **NO BARE URLs**: Never include URLs without [text](URL) format
-- ❌ **NO INCONSISTENT HEADERS**: Don't mix header levels randomly
-- ❌ **NO UNFORMATTED TABLES**: Never use plain text for tabular data
-- ❌ **NO MIXED LIST STYLES**: Don't mix bullet points and numbers in same list
-- ❌ **NO H1 HEADERS**: Never use # (h1) - start with ## (h2)
-
-### Mathematical Formatting
-- ⚠️ **INLINE**: Use \`$equation$\` for inline math
-- ⚠️ **BLOCK**: Use \`$$equation$$\` for block math
-- ⚠️ **CURRENCY**: Use "USD", "EUR" instead of $ symbol
-- ⚠️ **SPACING**: No space between $ and equation
-- ⚠️ **BLOCK SPACING**: Blank lines before and after block equations
-- ⚠️ **NO Slashes**: Never use slashes with $ symbol, since it breaks the formatting!!!
-
-**Correct Examples:**
-- Inline: $E = mc^2$ for energy-mass equivalence
-- Block: 
-
-$$
-F = G \frac{m_1 m_2}{r^2}
-$$
-
-- Currency: 100 USD (not $100)
-
-### Research Paper Structure
-- **Introduction** (2-3 paragraphs): Context, significance, research objectives
-  - ⚠️ MANDATORY: Start with "## Key Points" heading followed by bulleted list of main findings
-- **Main Sections** (3-5 sections): Each with 2-4 detailed paragraphs
-  - Use ## for section headers, ### for subsections
-  - Each paragraph should be 4-6 sentences minimum
-  - Every sentence with facts must have inline citations
-- **Analysis and Synthesis**: Cross-reference findings, identify patterns
-- **Limitations**: Discuss reliability and constraints of sources
-- **Conclusion** (2-3 paragraphs): Summary of key findings and implications
-
----
-
-## 🚫 PROHIBITED ACTIONS
-
-- ❌ **Multiple Tool Calls**: Don't run extreme_search multiple times
-- ❌ **Pre-Tool Thoughts**: Never write analysis before running the tool
-- ❌ **Response Prefaces**: Don't start with "According to my search" or "Based on the results"
-- ❌ **UNSUPPORTED CLAIMS**: Never make any factual statement without immediate citation
-- ❌ **VAGUE SOURCES**: Never use generic source titles like "Source", "Article", "Report"
-- ❌ **END CITATIONS**: Never put citations at the end of responses - creates terrible UX
-- ❌ **END GROUPED CITATIONS**: Never group citations at end of paragraphs or responses - breaks reading flow
-- ❌ **CITATION SECTIONS**: Never create sections for links, references, or additional resources
-- ❌ **CITATION HUNTING**: Never force users to hunt for which citation supports which claim
-- ❌ **PLAIN TEXT FORMATTING**: Never use plain text for lists, tables, or structure
-- ❌ **BARE URLs**: Never include URLs without proper [text](URL) markdown format
-- ❌ **INCONSISTENT HEADERS**: Never mix header levels or use inconsistent formatting
-- ❌ **UNFORMATTED CODE**: Never show code without proper \`\`\`language blocks
-- ❌ **PLAIN TABLES**: Never use plain text for tabular data - use markdown tables
-- ❌ **SHORT RESPONSES**: Never write brief responses - aim for 3-page research paper format
-- ❌ **BULLET-POINT RESPONSES**: Use paragraphs for main content, bullets only for Key Points section`,
+          activeTools: activeToolNames,
+          system: systemPrompt,
           toolChoice: 'auto',
-          tools: {
-            extreme_search: extremeSearchTool(dataStream),
-          },
+          tools,
           onChunk(event) {
             if (event.chunk.type === 'tool-call') {
               console.log('Called Tool: ', event.chunk.toolName);
@@ -369,20 +552,17 @@ $$
 
             if (event.finishReason === 'stop') {
               try {
-                // Generate title for the chat
                 const title = await generateTitleFromUserMessage({
                   message: userMessage,
                 });
 
                 console.log('Generated title: ', title);
 
-                // Update the chat with the generated title
                 await updateChatTitleById({
                   chatId,
                   title: `Scheduled: ${title}`,
                 });
 
-                // Track extreme search usage
                 const extremeSearchUsed = event.steps?.some((step) =>
                   step.toolCalls?.some((toolCall) => toolCall.toolName === 'extreme_search'),
                 );
@@ -392,16 +572,13 @@ $$
                   await incrementExtremeSearchUsage({ userId: userResult.id });
                 }
 
-                // Calculate run duration
                 runDuration = Date.now() - requestStartTime;
 
-                // Count searches performed (look for extreme_search tool calls)
                 const searchesPerformed =
                   event.steps?.reduce((total, step) => {
-                    return total + (step.toolCalls?.filter((call) => call.toolName === 'extreme_search').length || 0);
-                  }, 0) || 0;
+                    return total + (step.toolCalls?.length ?? 0);
+                  }, 0) ?? 0;
 
-                // Update lookout with last run info including metrics
                 await updateLookoutLastRun({
                   id: lookoutId,
                   lastRunAt: new Date(),
@@ -412,7 +589,6 @@ $$
                   searchesPerformed,
                 });
 
-                // Calculate next run time for recurring lookouts
                 if (lookout.frequency !== 'once' && lookout.cronSchedule) {
                   try {
                     const options = {
@@ -420,7 +596,6 @@ $$
                       tz: lookout.timezone,
                     };
 
-                    // Strip CRON_TZ= prefix if present
                     const cleanCronSchedule = lookout.cronSchedule.startsWith('CRON_TZ=')
                       ? lookout.cronSchedule.split(' ').slice(1).join(' ')
                       : lookout.cronSchedule;
@@ -436,20 +611,16 @@ $$
                     console.error('Error calculating next run time:', error);
                   }
                 } else if (lookout.frequency === 'once') {
-                  // Mark one-time lookouts as paused after running
                   await updateLookoutStatus({
                     id: lookoutId,
                     status: 'paused',
                   });
                 }
 
-                // Send completion email to user
                 if (userResult.email) {
                   try {
-                    // Extract assistant response - use event.text which contains the full response
                     let assistantResponseText = event.text || '';
 
-                    // If event.text is empty, try extracting from messages
                     if (!assistantResponseText.trim()) {
                       const assistantMessages = event.response.messages.filter((msg: any) => msg.role === 'assistant');
 
@@ -467,11 +638,9 @@ $$
                     }
 
                     console.log('📧 Assistant response length:', assistantResponseText.length);
-                    console.log('📧 First 200 chars:', assistantResponseText.substring(0, 200));
 
                     const trimmedResponse = assistantResponseText.trim() || 'No response available.';
-                    const finalResponse =
-                      trimmedResponse.length > 2000 ? trimmedResponse.substring(0, 2000) + '...' : trimmedResponse;
+                    const finalResponse = truncateMarkdown(trimmedResponse, 2000);
 
                     await sendLookoutCompletionEmail({
                       to: userResult.email,
@@ -484,7 +653,6 @@ $$
                   }
                 }
 
-                // Set lookout status back to active after successful completion
                 await updateLookoutStatus({
                   id: lookoutId,
                   status: 'active',
@@ -496,7 +664,6 @@ $$
               }
             }
 
-            // Calculate and log overall request processing time
             const requestEndTime = Date.now();
             const processingTime = (requestEndTime - requestStartTime) / 1000;
             console.log('--------------------------------');
@@ -506,11 +673,9 @@ $$
           onError: async (event) => {
             console.log('Error: ', event.error);
 
-            // Calculate run duration and capture error
             runDuration = Date.now() - requestStartTime;
             runError = (event.error as string) || 'Unknown error occurred';
 
-            // Update lookout with failed run info
             try {
               await updateLookoutLastRun({
                 id: lookoutId,
@@ -524,7 +689,6 @@ $$
               console.error('Failed to update lookout with error info:', updateError);
             }
 
-            // Set lookout status back to active on error
             try {
               await updateLookoutStatus({
                 id: lookoutId,
@@ -571,7 +735,6 @@ $$
       },
       onFinish: async ({ messages }) => {
         if (userId) {
-          // Validate user exists and is Pro user
           const user = await getUserById(userId);
           const isUserPro = user ? await checkUserIsProById(userId) : false;
 

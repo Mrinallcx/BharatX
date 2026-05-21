@@ -23,6 +23,7 @@ import Messages from '@/components/messages';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
 import FormComponent from '@/components/ui/form-component';
+import { ExampleCategories } from '@/components/example-categories';
 
 // Hook imports
 import { useAutoResume } from '@/hooks/use-auto-resume';
@@ -37,6 +38,7 @@ import { ChatSDKError } from '@/lib/errors';
 import { cn, SearchGroupId, invalidateChatsCache } from '@/lib/utils';
 import { requiresProSubscription } from '@/ai/providers';
 import { ConnectorProvider } from '@/lib/connectors';
+import { MarketTickerStrip } from '@/components/market-ticker-strip';
 
 // State management imports
 import { chatReducer, createInitialState } from '@/components/chat-state';
@@ -178,8 +180,8 @@ const ChatInterface = memo(
 
       // If current model requires pro but user is not pro, switch to default
       // Also prevent infinite loops by ensuring we're not already on the default model
-      if (currentModelRequiresPro && !isUserPro && selectedModel !== 'scira-grok-4-fast-think') {
-        console.log(`Auto-switching from pro model '${selectedModel}' to 'scira-grok-4-fast-think' - user lost pro access`);
+      if (currentModelRequiresPro && !isUserPro && selectedModel !== 'bharatx-grok-4-fast-think') {
+        console.log(`Auto-switching from pro model '${selectedModel}' to 'bharatx-grok-4-fast-think' - user lost pro access`);
         setSelectedModel('bharatx-grok-4-fast-think');
 
         // Show a toast notification to inform the user
@@ -278,7 +280,7 @@ const ChatInterface = memo(
       experimental_throttle: 100,
       onData: (dataPart) => {
         console.log('onData<Client>', dataPart);
-        setDataStream((ds) => (ds ? [...ds, dataPart] : []));
+        setDataStream((ds) => (ds ? [...ds, dataPart as any] : []));
       },
       onFinish: async ({ message }) => {
         console.log('onFinish<Client>', message.parts);
@@ -604,6 +606,7 @@ const ChatInterface = memo(
           setSettingsOpen={setSettingsOpen}
           settingsInitialTab={settingsInitialTab}
         />
+        <MarketTickerStrip />
 
         {/* Chat Dialogs Component */}
         <ChatDialogs
@@ -788,6 +791,26 @@ const ChatInterface = memo(
                   selectedConnectors={selectedConnectors}
                   setSelectedConnectors={setSelectedConnectors}
                 />
+
+                {/* Example categories - shown on empty state below the form */}
+                {messages.length === 0 && !chatState.hasSubmitted && (
+                  <ExampleCategories
+                    onSelectExample={(text, group) => {
+                      if (group) {
+                        setSelectedGroup(group as SearchGroupId);
+                      }
+                      setInput(text);
+                      setTimeout(() => {
+                        sendMessage({
+                          parts: [{ type: 'text', text }],
+                          role: 'user',
+                        });
+                        dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
+                      }, 100);
+                    }}
+                    className="mt-4"
+                  />
+                )}
               </div>
             )}
 

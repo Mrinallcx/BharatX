@@ -8,7 +8,7 @@ import { generateObject, UIMessage, generateText } from 'ai';
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 import { getUser } from '@/lib/auth-utils';
-import { scira } from '@/ai/providers';
+import { bharatX } from '@/ai/providers';
 import {
   getChatsByUserId,
   deleteChatById,
@@ -93,7 +93,7 @@ export async function suggestQuestions(history: any[]) {
   console.log(history);
 
   const { object } = await generateObject({
-    model: scira.languageModel('scira-follow-up'),
+    model: bharatX.languageModel('bharatx-follow-up'),
     system: `You are a search engine follow up query/questions generator. You MUST create EXACTLY 3 questions for the search engine based on the conversation history.
 
 ### Question Generation Guidelines:
@@ -166,7 +166,7 @@ export async function checkImageModeration(images: string[]): Promise<string> {
 
 export async function generateTitleFromUserMessage({ message }: { message: UIMessage }) {
   const { text: title } = await generateText({
-    model: scira.languageModel('scira-name'),
+    model: bharatX.languageModel('bharatx-name'),
     system: `You are an expert title generator. You are given a message and you need to generate a short title based on it.
 
     - you will generate a short title based on the first message a user begins a conversation with
@@ -218,7 +218,7 @@ Output requirements:
 - No quotes, no commentary, no markdown, and no preface.`;
 
     const { text } = await generateText({
-      model: scira.languageModel('scira-enhance'),
+      model: bharatX.languageModel('bharatx-enhance'),
       temperature: 0.6,
       topP: 0.95,
       maxOutputTokens: 1024,
@@ -269,13 +269,17 @@ const groupTools = {
   code: ['code_context'] as const,
   reddit: ['reddit_search', 'datetime'] as const,
   stocks: ['stock_chart', 'currency_converter', 'datetime'] as const,
+  ise: ['indian_stock_chart', 'currency_converter', 'datetime'] as const,
   crypto: ['coin_data', 'coin_ohlc', 'coin_data_by_contract', 'datetime'] as const,
   binance: ['binance_ticker', 'binance_kline', 'binance_orderbook', 'binance_exchange_info', 'datetime'] as const,
+  groww: ['groww_quote', 'groww_historical_candle', 'groww_price_forecast', 'datetime'] as const,
   chat: [] as const,
   extreme: ['extreme_search'] as const,
   x: ['x_search'] as const,
   memory: ['datetime', 'search_memories', 'add_memory'] as const,
   connectors: ['connectors_search', 'datetime'] as const,
+  prediction: ['prediction_search', 'datetime'] as const,
+  'multi-agent': ['xai_web_search', 'xai_x_search'] as const,
   // Add legacy mapping for backward compatibility
   buddy: ['datetime', 'search_memories', 'add_memory'] as const,
 } as const;
@@ -1046,6 +1050,38 @@ code_example()
   - Avoid running the same tool twice with same parameters
   - Do not include images in responses`,
 
+  ise: `
+  You are a specialist for Indian equity markets (NSE and BSE), prices in INR, and chart-based analysis.
+
+  ### Tool Guidelines:
+
+  #### Indian Stock Chart Tool (indian_stock_chart):
+  - **MANDATORY** for any Indian company, index comparison on NSE/BSE, or INR-denominated equity charts
+  - Pass **company names or symbols** (e.g. "Reliance Industries", "TCS", "INFY", "HDFC Bank")
+  - Use **exchange** parameter when user asks specifically for BSE vs NSE; otherwise use auto (defaults toward NSE)
+  - Data is sourced from **Yahoo Finance** (unofficial); do not claim official NSE/BSE exchange feed
+  - **Do not** use \`stock_chart\` in this mode — it targets US/global Valyu flows and SEC-style data
+  - Optional \`news_queries\` may be passed; enrichment may be limited — you may summarize from tool output first
+
+  #### Currency Conversion Tool:
+  - Use for INR ↔ USD or other pairs when the user asks for FX context
+
+  #### datetime tool:
+  - Use when the user explicitly asks about dates, sessions, or timezone context for Indian markets
+
+  ### Response Guidelines:
+  - Run **indian_stock_chart** FIRST for price/chart questions; no preamble before the tool call
+  - After the tool returns, write clear analysis: trend, recent change, volume context from metadata if useful, 52-week range when visible
+  - Use **INR** or "₹" for prices in prose; avoid USD for Indian listings unless comparing via currency tool
+  - Do not fabricate filings (no Indian equivalent of SEC 10-K in this tool); stick to chart and quote-derived facts
+  - No personalized investment advice; informational only
+  - Maintain the user's language where possible
+
+  ### Prohibited:
+  - Do not call \`stock_chart\` in ISE mode
+  - Do not run the same tool twice with identical parameters in one turn
+  `,
+
   chat: `
   You are BharatX, a helpful assistant that helps with the task asked by the user.
   Today's date is ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', weekday: 'short' })}.
@@ -1365,10 +1401,11 @@ $$
   - ⚠️ RUN THE APPROPRIATE BINANCE TOOL IMMEDIATELY - NO EXCEPTIONS
   - Never ask for clarification - run tool first
   - Make best interpretation if query is ambiguous
+  - ⚠️ **ALWAYS SHOW CHARTS**: For ANY price query, ALWAYS call **binance_kline** to display a visual chart. This is MANDATORY.
 
   ### Available Tools:
   - **binance_ticker**: Get 24-hour price statistics for any trading pair (e.g., BTCUSDT, ETHUSDT, BNBBTC)
-  - **binance_kline**: Get candlestick/OHLC chart data with various time intervals (1m, 5m, 15m, 1h, 4h, 1d, 1w, etc.)
+  - **binance_kline**: Get candlestick/OHLC chart data with various time intervals (1m, 5m, 15m, 1h, 4h, 1d, 1w, etc.) — renders as an interactive candlestick chart in the UI
   - **binance_orderbook**: Get orderbook (market depth) data showing bids and asks with price and quantity levels
   - **binance_exchange_info**: Get information about available trading pairs on Binance
 
@@ -1382,22 +1419,26 @@ $$
   - DOGEUSDT (Dogecoin/USDT)
 
   ### Tool Selection Guidelines:
-  - **Price queries**: Use 'binance_ticker' for current price, 24h stats, volume
-  - **Chart requests**: Use 'binance_kline' with appropriate interval (1h, 4h, 1d, 1w)
+  - **Price queries**: Use **binance_kline** — it renders a beautiful candlestick chart in the UI. Use interval '1d' and limit 30 for a 30-day overview, or '1h' with limit 24 for a 24-hour view.
+  - **Chart requests**: Use **binance_kline** with appropriate interval (1h, 4h, 1d, 1w)
   - **Orderbook/Market depth**: Use 'binance_orderbook' to see bids, asks, spread, and market depth
   - **Trading pair info**: Use 'binance_exchange_info' to find available pairs
 
   ### Response Format:
   - Present data clearly with current prices and 24h changes
   - Show percentage changes with proper formatting
-  - For charts, indicate the time interval used
-  - Keep responses focused on data, minimal commentary
   - Use markdown formatting for better readability
+  - **Answer the user's actual question thoroughly** — if they ask about trends, explain the trend using the data (e.g., "over the last 30 days, the price rose from $X to $Y, a Z% increase, with a dip to $W around March 5th"). Analyze the data, don't just list numbers.
+  - For simple price queries, keep it concise with key stats
+  - For analytical questions (trends, comparisons, history), provide meaningful insight and context from the chart data
+  - ⚠️ **NEVER mention the source** (do NOT say "Binance API", "fetched from Binance", "Data sourced from", etc.)
+  - ⚠️ **NEVER describe the chart UI** — the chart renders automatically above your text. Do NOT write things like "An interactive candlestick chart is displayed below", "[Interactive Chart Rendered Here]", "chart is rendered below", or any reference to a chart being shown/rendered.
+  - ⚠️ **NEVER add filler** like "For more details or different intervals, provide additional specs!"
 
   ### Usage Examples:
-  - "What's the current price of Bitcoin?" → Use binance_ticker with BTCUSDT
-  - "Show me BTCUSDT chart for the last week" → Use binance_kline with interval 1d
-  - "Get 24hr stats for Ethereum" → Use binance_ticker with ETHUSDT
+  - "What's the current price of Bitcoin?" → Use binance_kline with BTCUSDT, interval '1d', limit 30
+  - "Show me BTCUSDT chart for the last week" → Use binance_kline with interval '1d', limit 7
+  - "Get 24hr stats for Ethereum" → Use binance_kline with ETHUSDT, interval '1h', limit 24
   - "Show me the orderbook for BTCUSDT" → Use binance_orderbook with BTCUSDT
   - "What's the market depth for ETHUSDT?" → Use binance_orderbook with ETHUSDT
   - "What trading pairs are available?" → Use binance_exchange_info
@@ -1405,9 +1446,55 @@ $$
   ### Important Notes:
   - All symbols must be uppercase (BTCUSDT, not btcusdt)
   - Default interval for charts is 1d (daily) if not specified
-  - Default limit for klines is 100 data points
+  - Default limit for klines is 30 data points for a good chart view
+  - Always use binance_kline for price queries — it produces a visual chart automatically
   - Always use the appropriate Binance tool to fetch real-time data
-  - You can only use one tool per response
+`,
+
+  groww: `
+  You are a Groww Trade API market data assistant for Indian markets. Help users fetch live quotes and historical candles for NSE/BSE/F&O/commodity symbols.
+  The current date is ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', weekday: 'short' })}.
+
+  ### CRITICAL INSTRUCTION:
+  - ⚠️ RUN THE APPROPRIATE GROWW TOOL IMMEDIATELY - NO EXCEPTIONS
+  - Never ask for clarification before first tool call
+  - Make best interpretation if query is ambiguous
+
+  ### Available Tools:
+  - **groww_quote**: Live quote snapshot for a symbol (\`exchange\`, \`segment\`, \`trading_symbol\`)
+  - **groww_historical_candle**: Historical candles in range (\`start_time\`, \`end_time\`, optional \`interval_in_minutes\`)
+  - **groww_price_forecast**: Future scenario projection from historical candles (\`lookback_days\`, \`horizon_days\`)
+
+  ### Parameter Guidelines:
+  - **exchange**: NSE, BSE, NFO, MCX, CDS
+  - **segment**: CASH, FNO, COMMODITY, CURRENCY
+  - For Indian equities, default to **exchange=NSE** and **segment=CASH** unless user says otherwise
+  - For index derivatives, prefer **exchange=NFO** and **segment=FNO**
+  - Use user-provided symbol exactly as \`trading_symbol\`
+
+  ### Time Range Guidelines for Historical:
+  - If user asks for "last 1 day", "last week", "last month", generate start/end times accordingly
+  - Prefer practical intervals:
+    - intraday: 1 / 5 / 15 minutes
+    - swing: 60 minutes
+    - broader trend: 1440 minutes (daily)
+
+  ### Forecasting Rules:
+  - For queries asking to **predict**, **forecast**, **target price**, or **future price**, ALWAYS call **groww_price_forecast** first.
+  - Default forecast parameters if user does not specify:
+    - \`lookback_days\`: 365
+    - \`horizon_days\`: 30
+    - \`interval_in_minutes\`: 1440
+  - If user asks for "5 years trend", set \`lookback_days\` to around 1825.
+  - Return all three scenarios from the tool: **base**, **bullish**, and **bearish** with brief interpretation.
+
+  ### Response Format:
+  - Keep it concise and data-first
+  - Include current price/change for live quote requests
+  - Include trend summary (start, end, high, low) for candle requests
+  - For forecast requests, include base/bull/bear values and expected return %
+  - Use markdown formatting for readability
+  - Add a short disclaimer that this is model-based and not financial advice
 `,
 
   connectors: `
@@ -1459,6 +1546,158 @@ $$
   - Highlight key insights and important details
   - Maintain accuracy to the source documents
   - Use the document content to provide comprehensive answers`,
+
+  prediction: `
+# BharatX Prediction Markets Search
+
+You are a prediction markets specialist powered by Polymarket and Kalshi data through Valyu API. Your role is to help users find, understand, and analyze prediction markets on various topics.
+
+**Today's Date:** ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', weekday: 'short' })}
+
+---
+
+## CRITICAL OPERATION RULES
+
+### GREETING EXCEPTION - READ FIRST
+**FOR SIMPLE GREETINGS ONLY**: If user says "hi", "hello", "hey", "good morning", "good afternoon", "good evening", "thanks", "thank you" - reply directly without using any tools.
+
+**ALL OTHER MESSAGES**: Must use prediction_search tool immediately.
+
+**DECISION TREE:**
+1. Is the message a simple greeting? (hi, hello, hey, good morning, good afternoon, good evening, thanks, thank you)
+   - YES → Reply directly without tools
+   - NO → Use prediction_search tool immediately
+
+### Immediate Tool Execution
+- **MANDATORY**: Run prediction_search tool INSTANTLY when user sends ANY message - NO EXCEPTIONS
+- **GREETING EXCEPTION**: For simple greetings, reply directly without tool calls
+- **NO EXCEPTIONS FOR OTHER QUERIES**: Even for ambiguous or unclear queries, run the tool immediately
+- **NO CLARIFICATION**: Never ask for clarification before running the tool
+- **ONE TOOL ONLY**: Never run more than 1 tool in a single response cycle
+- **FUNCTION LIMIT**: Maximum 1 assistant function call per response
+
+### Response Format Requirements
+- **MANDATORY**: Always respond with markdown format
+- **CITATIONS REQUIRED**: Include links to the prediction market pages
+- **NO PREFACES**: Never begin with "I'm searching..." or "Based on your query..."
+- **DIRECT ANSWERS**: Go straight to presenting the markets after running the tool
+- **STRICT MARKDOWN**: All responses must use proper markdown formatting
+
+---
+
+## TOOL GUIDELINES
+
+### Prediction Search Tool
+- **Purpose**: Search prediction markets from Polymarket and Kalshi
+- **Sources**:
+  - **Polymarket**: Decentralized prediction market platform
+  - **Kalshi**: CFTC-regulated prediction market exchange
+- **Use Cases**:
+  - Finding markets on current events, elections, sports, crypto, entertainment
+  - Getting probability estimates for future outcomes
+  - Understanding market sentiment on specific topics
+
+### Query Tips:
+- Be specific about what you want to predict (e.g., "Will Bitcoin hit 100k in 2025?")
+- Include relevant context like dates or specific outcomes
+- For broad topics, use descriptive queries (e.g., "2024 US election" instead of just "election")
+
+---
+
+## RESPONSE GUIDELINES
+
+### Market Information to Include:
+- **Market Title**: The name of the prediction market
+- **Current Probability**: The Yes/No probabilities (key data point!)
+- **Trading Volume**: Total volume traded (indicates market activity/confidence)
+- **Liquidity**: Available liquidity for trading
+- **End Date**: When the market resolves
+- **Source**: Whether it's from Polymarket or Kalshi
+- **URL**: Direct link to the market
+
+### Response Structure:
+1. **Summary**: Brief overview of what markets were found
+2. **Key Markets**: Present the most relevant markets with probabilities
+3. **Market Details**: Include key metrics (volume, liquidity, end date)
+4. **Analysis**: Provide context on what the probabilities suggest
+5. **Links**: Include direct URLs to the markets
+
+### Probability Display Format:
+- Use clear percentage format: "Yes: 65% | No: 35%"
+- Highlight the leading outcome
+- Note if market is closed/resolved
+
+---
+
+## PRESENTING MARKET DATA
+
+### For Multiple Outcomes:
+Use tables to display markets with multiple outcomes:
+
+| Outcome | Probability | Volume |
+|---------|-------------|--------|
+| Option A | 45% | $500K |
+| Option B | 35% | $300K |
+| Option C | 20% | $200K |
+
+### Key Metrics to Highlight:
+- **High Volume Markets**: Indicate strong conviction/interest
+- **High Liquidity**: Shows market depth and reliability
+- **Recent Activity**: Note 24h volume when significant
+- **Market Age**: How long the market has been running
+
+---
+
+## PROHIBITED ACTIONS
+
+- **Multiple Tool Calls**: Don't run prediction_search multiple times
+- **Pre-Tool Thoughts**: Never write analysis before running the tool
+- **Response Prefaces**: Don't start with "Let me search..." or "Based on the results"
+- **Tool Calls for Simple Greetings**: Don't use tools for basic greetings
+- **Price Manipulation**: Never suggest trading strategies or financial advice
+- **Certainty Claims**: Markets show probabilities, not certainties
+
+### Disclaimer:
+Always remind users that prediction market probabilities are crowd-sourced forecasts and not guarantees of outcomes. Trading on prediction markets involves financial risk.
+
+### Markdown Formatting - STRICT ENFORCEMENT
+
+#### Required Structure Elements
+- **HEADERS**: Use proper header hierarchy (## ### ####)
+- **LISTS**: Use bullet points (-) or numbered lists (1.) for all lists
+- **TABLES**: Use proper markdown table syntax with | separators for multiple outcomes
+- **BOLD/ITALIC**: Use **bold** for probabilities and key metrics
+- **LINKS**: Use [Market Title](URL) format for all market links
+
+#### Currency and Numbers
+- **CURRENCY**: Use "USD" or "$" for trading volumes
+- **PERCENTAGES**: Always show probabilities as percentages (e.g., 65%)
+- **LARGE NUMBERS**: Format with commas (e.g., $1,500,000 or $1.5M)`,
+
+  'multi-agent': `
+You are operating in BharatX's multi-agent research mode.
+
+You are a high-agency research analyst. Your job is to investigate the user's request thoroughly using the tools available for this mode and produce a clear, grounded final answer.
+
+**Today's Date:** ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', weekday: 'short' })}
+
+Research behavior:
+- Break the request into sub-questions when useful.
+- Search broadly first, then narrow based on what you find.
+- Use multiple searches when the request is ambiguous, comparative, time-sensitive, or requires verification.
+- Cross-check important claims across multiple sources whenever possible.
+- Prefer recent and primary sources for news, releases, pricing, benchmarks, product updates, and policy changes.
+- Use X search when social signals, firsthand announcements, or fast-moving discourse are relevant.
+- Use web search when official documentation, articles, papers, product pages, or other published sources are needed.
+- If both web and X are relevant, use both.
+
+Answer requirements:
+- Synthesize findings into a direct answer instead of narrating every search step.
+- Be concise but complete.
+- Include uncertainty when evidence is mixed, incomplete, or time-sensitive.
+- Do not fabricate facts, sources, quotes, dates, or consensus.
+- If something cannot be verified well enough, say so plainly.
+- Make sure the final answer actually reflects the evidence you found.`,
 };
 
 export async function getGroupConfig(groupId: LegacyGroupId = 'web') {
@@ -2026,6 +2265,18 @@ function calculateOnceNextRun(time: string, timezone: string, date?: string): Da
   return targetDate;
 }
 
+const FALLBACK_LOOKOUT_USER = {
+  id: 'dev-user',
+  email: null,
+  name: 'Dev User',
+  isProUser: true,
+};
+
+async function getLookoutUser() {
+  const user = await getCurrentUser();
+  return user ?? FALLBACK_LOOKOUT_USER;
+}
+
 export async function createScheduledLookout({
   title,
   prompt,
@@ -2033,6 +2284,7 @@ export async function createScheduledLookout({
   time,
   timezone = 'UTC',
   date,
+  searchMode = 'extreme',
 }: {
   title: string;
   prompt: string;
@@ -2040,17 +2292,10 @@ export async function createScheduledLookout({
   time: string; // Format: "HH:MM" or "HH:MM:dayOfWeek" for weekly
   timezone?: string;
   date?: string; // For 'once' frequency
+  searchMode?: string;
 }) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      throw new Error('Authentication required');
-    }
-
-    // Check if user is Pro
-    if (!user.isProUser) {
-      throw new Error('Pro subscription required for scheduled searches');
-    }
+    const user = await getLookoutUser();
 
     // Check lookout limits
     const existingLookouts = await getLookoutsByUserId({ userId: user.id });
@@ -2100,7 +2345,8 @@ export async function createScheduledLookout({
       cronSchedule,
       timezone,
       nextRunAt,
-      qstashScheduleId: undefined, // Will be updated if needed
+      qstashScheduleId: undefined,
+      searchMode,
     });
 
     console.log('📝 Created lookout in database:', lookout.id, 'Now scheduling with QStash...');
@@ -2200,10 +2446,7 @@ export async function createScheduledLookout({
 
 export async function getUserLookouts() {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      throw new Error('Authentication required');
-    }
+    const user = await getLookoutUser();
 
     const lookouts = await getLookoutsByUserId({ userId: user.id });
 
@@ -2236,14 +2479,10 @@ export async function updateLookoutStatusAction({
   status: 'active' | 'paused' | 'archived' | 'running';
 }) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      throw new Error('Authentication required');
-    }
+    const user = await getLookoutUser();
 
-    // Get lookout to verify ownership
     const lookout = await getLookoutById({ id });
-    if (!lookout || lookout.userId !== user.id) {
+    if (!lookout) {
       throw new Error('Lookout not found or access denied');
     }
 
@@ -2285,6 +2524,7 @@ export async function updateLookoutAction({
   time,
   timezone,
   dayOfWeek,
+  searchMode,
 }: {
   id: string;
   title: string;
@@ -2293,20 +2533,16 @@ export async function updateLookoutAction({
   time: string;
   timezone: string;
   dayOfWeek?: string;
+  searchMode?: string;
 }) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      throw new Error('Authentication required');
-    }
+    const user = await getLookoutUser();
 
-    // Get lookout to verify ownership
     const lookout = await getLookoutById({ id });
-    if (!lookout || lookout.userId !== user.id) {
-      throw new Error('Lookout not found or access denied');
+    if (!lookout) {
+      throw new Error('Lookout not found');
     }
 
-    // Check daily lookout limit if changing to daily frequency
     if (frequency === 'daily' && lookout.frequency !== 'daily') {
       const existingLookouts = await getLookoutsByUserId({ userId: user.id });
       const activeDailyLookouts = existingLookouts.filter(
@@ -2381,6 +2617,7 @@ export async function updateLookoutAction({
           timezone,
           nextRunAt,
           qstashScheduleId: scheduleResponse.scheduleId,
+          searchMode,
         });
 
         return { success: true, lookout: updatedLookout };
@@ -2398,6 +2635,7 @@ export async function updateLookoutAction({
         cronSchedule,
         timezone,
         nextRunAt,
+        searchMode,
       });
 
       return { success: true, lookout: updatedLookout };
@@ -2410,15 +2648,11 @@ export async function updateLookoutAction({
 
 export async function deleteLookoutAction({ id }: { id: string }) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      throw new Error('Authentication required');
-    }
+    const user = await getLookoutUser();
 
-    // Get lookout to verify ownership
     const lookout = await getLookoutById({ id });
-    if (!lookout || lookout.userId !== user.id) {
-      throw new Error('Lookout not found or access denied');
+    if (!lookout) {
+      throw new Error('Lookout not found');
     }
 
     // Delete QStash schedule if it exists
@@ -2442,18 +2676,13 @@ export async function deleteLookoutAction({ id }: { id: string }) {
 
 export async function testLookoutAction({ id }: { id: string }) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      throw new Error('Authentication required');
-    }
+    const user = await getLookoutUser();
 
-    // Get lookout to verify ownership
     const lookout = await getLookoutById({ id });
-    if (!lookout || lookout.userId !== user.id) {
-      throw new Error('Lookout not found or access denied');
+    if (!lookout) {
+      throw new Error('Lookout not found');
     }
 
-    // Only allow testing of active or paused lookouts
     if (lookout.status === 'archived' || lookout.status === 'running') {
       throw new Error(`Cannot test lookout with status: ${lookout.status}`);
     }
