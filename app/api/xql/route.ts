@@ -15,7 +15,7 @@ import {
 import { ChatSDKError } from '@/lib/errors';
 
 import { markdownJoinerTransform } from '@/lib/parser';
-import { scira } from '@/ai/providers';
+import { bharatX } from '@/ai/providers';
 
 import { z } from 'zod';
 import { GroqProviderOptions } from '@ai-sdk/groq';
@@ -67,7 +67,7 @@ const xqlTool = tool({
         console.log('X search - includeHandles:', normalizedInclude, 'excludeHandles:', normalizedExclude);
 
         const result = await generateText({
-            model: scira.languageModel('scira-grok-4-fast'),
+            model: bharatX.languageModel('bharatx-grok-4-fast'),
             prompt: query,
             maxOutputTokens: 10,
             providerOptions: {
@@ -121,8 +121,8 @@ export async function POST(req: Request) {
     // All users (including guests) have Pro access - no restrictions
 
     const result = streamText({
-        model: scira.languageModel('scira-grok-4-fast'),
-        messages: convertToModelMessages(messages),
+        model: bharatX.languageModel('bharatx-grok-4-fast'),
+        messages: await convertToModelMessages(messages),
         stopWhen: hasToolCall('xql'),
         onAbort: ({ steps }) => {
             console.log('Stream aborted after', steps.length, 'steps');

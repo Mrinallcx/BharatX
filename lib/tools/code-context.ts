@@ -3,18 +3,11 @@ import { z } from 'zod';
 import { serverEnv } from '@/env/server';
 
 export const codeContextTool = tool({
-  name: 'code-context',
   description: 'Get the context about coding, programming, and development libraries, frameworks, and tools',
   inputSchema: z.object({
     query: z.string().min(1).max(100).describe('The query to search for'),
   }),
-  outputSchema: z.object({
-    response: z.string().min(1),
-    resultsCount: z.number().min(0),
-    searchTime: z.number().min(0),
-    outputTokens: z.number().min(0),
-  }),
-  execute: async ({ query }) => {
+  execute: async ({ query }: { query: string }) => {
     const response = await fetch('https://api.exa.ai/context', {
       method: 'POST',
       headers: {

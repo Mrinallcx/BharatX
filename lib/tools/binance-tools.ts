@@ -95,10 +95,38 @@ export const binanceKlineTool = tool({
         trades: kline[8],
       }));
 
+      const lastCandle = formattedData[formattedData.length - 1];
+      const firstCandle = formattedData[0];
+      const periodPriceChange = lastCandle && firstCandle ? lastCandle.close - firstCandle.open : 0;
+      const periodPriceChangePercent = firstCandle?.open ? ((periodPriceChange / firstCandle.open) * 100) : 0;
+
+      const intervalLabels: Record<string, string> = {
+        '1m': 'minute', '3m': '3-minute', '5m': '5-minute', '15m': '15-minute',
+        '30m': '30-minute', '1h': 'hourly', '2h': '2-hour', '4h': '4-hour',
+        '6h': '6-hour', '8h': '8-hour', '12h': '12-hour', '1d': 'daily',
+        '3d': '3-day', '1w': 'weekly', '1M': 'monthly',
+      };
+      const candleCount = formattedData.length;
+      const intervalLabel = intervalLabels[interval] || interval;
+      const startDate = firstCandle ? new Date(firstCandle.timestamp).toISOString().split('T')[0] : '';
+      const endDate = lastCandle ? new Date(lastCandle.timestamp).toISOString().split('T')[0] : '';
+      const periodDescription = `${candleCount} ${intervalLabel} candles from ${startDate} to ${endDate}`;
+
       return {
         success: true,
         symbol: symbol.toUpperCase(),
         interval,
+        candleCount,
+        periodDescription,
+        startDate,
+        endDate,
+        currentPrice: lastCandle?.close || 0,
+        periodPriceChange: parseFloat(periodPriceChange.toFixed(2)),
+        periodPriceChangePercent: parseFloat(periodPriceChangePercent.toFixed(2)),
+        periodHigh: Math.max(...formattedData.map((d: any) => d.high)),
+        periodLow: Math.min(...formattedData.map((d: any) => d.low)),
+        note: `Price change, high, and low are for the FULL chart period (${periodDescription}), NOT 24-hour values. Use the binance_ticker tool for 24-hour statistics.`,
+        vsCurrency: 'usd',
         chart: {
           title: `${symbol.toUpperCase()} Candlestick Chart`,
           type: 'candlestick',
