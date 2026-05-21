@@ -744,6 +744,7 @@ export async function createLookout({
   timezone,
   nextRunAt,
   qstashScheduleId,
+  searchMode = 'extreme',
 }: {
   userId: string;
   title: string;
@@ -753,6 +754,7 @@ export async function createLookout({
   timezone: string;
   nextRunAt: Date;
   qstashScheduleId?: string;
+  searchMode?: string;
 }) {
   try {
     const [newLookout] = await db
@@ -766,6 +768,7 @@ export async function createLookout({
         timezone,
         nextRunAt,
         qstashScheduleId,
+        searchMode,
       })
       .returning();
 
@@ -781,6 +784,7 @@ export async function getLookoutsByUserId({ userId }: { userId: string }) {
   try {
     return await db.select().from(lookout).where(eq(lookout.userId, userId)).orderBy(desc(lookout.createdAt));
   } catch (error) {
+    console.error('getLookoutsByUserId error:', error);
     throw new ChatSDKError('bad_request:database', 'Failed to get lookouts by user id');
   }
 }
@@ -816,6 +820,7 @@ export async function updateLookout({
   timezone,
   nextRunAt,
   qstashScheduleId,
+  searchMode,
 }: {
   id: string;
   title?: string;
@@ -825,6 +830,7 @@ export async function updateLookout({
   timezone?: string;
   nextRunAt?: Date;
   qstashScheduleId?: string;
+  searchMode?: string;
 }) {
   try {
     const updateData: any = { updatedAt: new Date() };
@@ -835,6 +841,7 @@ export async function updateLookout({
     if (timezone !== undefined) updateData.timezone = timezone;
     if (nextRunAt !== undefined) updateData.nextRunAt = nextRunAt;
     if (qstashScheduleId !== undefined) updateData.qstashScheduleId = qstashScheduleId;
+    if (searchMode !== undefined) updateData.searchMode = searchMode;
 
     const [updatedLookout] = await db.update(lookout).set(updateData).where(eq(lookout.id, id)).returning();
 
