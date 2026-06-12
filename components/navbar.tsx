@@ -68,7 +68,7 @@ const Navbar = memo(
       <>
         <div
           className={cn(
-            'fixed left-0 right-0 z-30 top-0 flex justify-between items-center p-3 transition-colors duration-200',
+            'fixed left-0 right-0 z-30 top-7 flex justify-between items-center p-3 transition-colors duration-200',
             isDialogOpen
               ? 'bg-transparent pointer-events-none'
               : status === 'streaming' || status === 'ready'

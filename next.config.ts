@@ -1,6 +1,9 @@
 import type { NextConfig } from 'next';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createJiti } from 'jiti';
+
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const jiti = createJiti(fileURLToPath(import.meta.url));
 
@@ -8,6 +11,10 @@ jiti.import('./env/server.ts');
 jiti.import('./env/client.ts');
 
 const nextConfig: NextConfig = {
+  // Prevent Turbopack from treating a parent lockfile/package.json as the workspace root.
+  turbopack: {
+    root: projectRoot,
+  },
   compiler: {
     // if NODE_ENV is production, remove console.log
     removeConsole:
@@ -42,6 +49,15 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        source: '/widget/v1.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+      {
         source: '/(.*)',
         headers: [
           {
@@ -61,28 +77,7 @@ const nextConfig: NextConfig = {
     ];
   },
   async redirects() {
-    return [
-      {
-        source: '/ph',
-        destination: 'https://www.producthunt.com/posts/scira',
-        permanent: true,
-      },
-      {
-        source: '/raycast',
-        destination: 'https://www.raycast.com/zaidmukaddam/scira',
-        permanent: true,
-      },
-      {
-        source: '/plst',
-        destination: 'https://peerlist.io/zaidmukaddam/project/scira-ai-30',
-        permanent: true,
-      },
-      {
-        source: '/blog',
-        destination: 'https://blog.scira.ai',
-        permanent: true,
-      },
-    ];
+    return [];
   },
   images: {
     qualities: [75, 100],

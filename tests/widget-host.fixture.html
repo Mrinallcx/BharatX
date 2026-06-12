@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Widget smoke (local)</title>
+  </head>
+  <body>
+    <main id="main">
+      <h1>Fixture page</h1>
+      <p>
+        This paragraph exists so the widget has enough text to summarize. Open this file via a local HTTP server
+        (not file://) with the app running and WIDGET_ENABLED + WIDGET_SITES_JSON configured for that origin.
+      </p>
+    </main>
+    <script src="/widget/v1.js" defer data-api-base="http://localhost:3000"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        if (window.BharatXWidget) {
+          BharatXWidget.init({
+            siteKey: 'bxw-embed-7c2a9f1e-b4d3-4e8a-9c2f-toto-2026',
+            selector: '#main',
+          });
+        }
+      });
+    </script>
+  </body>
+</html>

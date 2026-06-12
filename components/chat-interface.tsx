@@ -35,10 +35,10 @@ import { useOptimizedScroll } from '@/hooks/use-optimized-scroll';
 // Utility and type imports
 import { SEARCH_LIMITS } from '@/lib/constants';
 import { ChatSDKError } from '@/lib/errors';
-import { cn, SearchGroupId, invalidateChatsCache } from '@/lib/utils';
+import { cn, SearchGroupId, invalidateChatsCache, isSearchGroupComingSoon } from '@/lib/utils';
 import { requiresProSubscription } from '@/ai/providers';
 import { ConnectorProvider } from '@/lib/connectors';
-import { MarketTickerStrip } from '@/components/market-ticker-strip';
+import { MarketTickerStrip, MARKET_TICKER_HEIGHT_CLASS } from '@/components/market-ticker-strip';
 
 // State management imports
 import { chatReducer, createInitialState } from '@/components/chat-state';
@@ -67,6 +67,12 @@ const ChatInterface = memo(
 
     const [selectedModel, setSelectedModel] = useLocalStorage('bharatx-selected-model', 'bharatx-grok-4-fast-think');
     const [selectedGroup, setSelectedGroup] = useLocalStorage<SearchGroupId>('bharatx-selected-group', 'web');
+
+    useEffect(() => {
+      if (isSearchGroupComingSoon(selectedGroup)) {
+        setSelectedGroup('web');
+      }
+    }, [selectedGroup, setSelectedGroup]);
     const [selectedConnectors, setSelectedConnectors] = useState<ConnectorProvider[]>([]);
     const [isCustomInstructionsEnabled, setIsCustomInstructionsEnabled] = useLocalStorage(
       'bharatx-custom-instructions-enabled',
@@ -588,6 +594,7 @@ const ChatInterface = memo(
 
     return (
       <div className="flex flex-col font-sans! items-center h-screen bg-background text-foreground transition-all duration-500 w-full overflow-x-hidden !scrollbar-thin !scrollbar-thumb-muted-foreground dark:!scrollbar-thumb-muted-foreground !scrollbar-track-transparent hover:!scrollbar-thumb-foreground dark:!hover:scrollbar-thumb-foreground">
+        <MarketTickerStrip />
         <Navbar
           isDialogOpen={chatState.anyDialogOpen}
           chatId={initialChatId || (messages.length > 0 ? chatId : null)}
@@ -606,7 +613,9 @@ const ChatInterface = memo(
           setSettingsOpen={setSettingsOpen}
           settingsInitialTab={settingsInitialTab}
         />
-        <MarketTickerStrip />
+        {/* Reserve space for fixed ticker + navbar */}
+        <div className={`${MARKET_TICKER_HEIGHT_CLASS} shrink-0`} aria-hidden="true" />
+        <div className="h-14 shrink-0 sm:h-16" aria-hidden="true" />
 
         {/* Chat Dialogs Component */}
         <ChatDialogs
@@ -641,7 +650,7 @@ const ChatInterface = memo(
         <div
           className={`w-full p-2 sm:p-4 relative ${status === 'ready' && messages.length === 0
               ? 'flex-1 !flex !flex-col !items-center !justify-center' // Center everything when no messages
-              : '!mt-20 sm:!mt-16 flex !flex-col' // Add top margin when showing messages
+              : 'flex !flex-col' // Ticker + navbar spacers provide top offset
             }`}
         >
           <div className={`w-full max-w-[95%] sm:max-w-2xl space-y-6 p-0 mx-auto transition-all duration-300`}>

@@ -342,7 +342,7 @@ export default function PricingTable({ subscriptionDetails, user }: PricingTable
 
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl font-medium">Scira Pro</h3>
+                <h3 className="text-xl font-medium">BharatX Pro</h3>
                 <Badge variant="secondary">Popular</Badge>
               </div>
 

@@ -17,3 +17,36 @@ export function getClientIdentifier(req: Request): string {
   return `ip:${ip}`;
 }
 
+let widgetRateLimitInstance: Ratelimit | null | undefined;
+
+/** Lazy Upstash limiter for embed widget; `null` if Redis env is unusable (dev / misconfig). */
+export function getWidgetRateLimit(): Ratelimit | null {
+  if (widgetRateLimitInstance !== undefined) return widgetRateLimitInstance;
+  try {
+    widgetRateLimitInstance = new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(60, '1 m'),
+      analytics: true,
+      prefix: '@upstash/ratelimit:widget',
+    });
+  } catch (e) {
+    console.warn('[widget] Upstash ratelimit unavailable; allowing requests', e);
+    widgetRateLimitInstance = null;
+  }
+  return widgetRateLimitInstance;
+}
+
+export async function limitWidgetRequest(
+  identifier: string,
+): Promise<{ success: boolean; remaining?: number }> {
+  const rl = getWidgetRateLimit();
+  if (!rl) return { success: true };
+  try {
+    const result = await rl.limit(identifier);
+    return { success: result.success, remaining: result.remaining };
+  } catch (e) {
+    console.warn('[widget] Upstash ratelimit request failed; allowing request', e);
+    return { success: true };
+  }
+}
+

@@ -68,6 +68,12 @@ export default function PrivacyPage() {
               <strong>Search Queries:</strong> The questions and searches you submit to our search engine.
             </li>
             <li>
+              <strong>Embeddable widget (optional on partner sites):</strong> If a website embeds our page assistant
+              widget and you use it, we may receive visible text extracted from that page, its URL, page title, and your
+              chat messages with the assistant, to answer questions grounded in that page. Partner sites are responsible
+              for disclosing this to you where required.
+            </li>
+            <li>
               <strong>Usage Data:</strong> Information about how you interact with our service, including features used
               and time spent on the platform.
             </li>
@@ -179,7 +185,7 @@ export default function PrivacyPage() {
 
           <div className="my-8 border-t pt-8">
             <p className="text-sm text-muted-foreground">
-              By using Scira AI, you agree to our Privacy Policy and our{' '}
+              By using BharatX, you agree to our Privacy Policy and our{' '}
               <Link href="/terms" className="underline">
                 Terms of Service
               </Link>
@@ -199,7 +205,7 @@ export default function PrivacyPage() {
                 <BharatXLogo className="size-4 opacity-80" />
               </div>
               <div className="text-sm text-muted-foreground">
-                © {new Date().getFullYear()} Scira AI by Zaid Mukaddam
+                © {new Date().getFullYear()} BharatX by Zaid Mukaddam
               </div>
             </div>
             <div className="flex items-center gap-6 text-sm text-muted-foreground">

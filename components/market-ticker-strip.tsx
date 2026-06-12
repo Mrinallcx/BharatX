@@ -8,7 +8,6 @@ type TickerItem = {
   symbol: string;
   price: number;
   changePct: number;
-  currency?: string;
   source: 'yahoo' | 'binance';
   delayed?: boolean;
   asOf: string;
@@ -20,24 +19,20 @@ type TickerApiResponse = {
   items: TickerItem[];
 };
 
-const REFRESH_MS = 30_000;
+const REFRESH_MS = 15_000;
 
-function formatPrice(price: number, currency?: string) {
+/** Fixed strip height — keep in sync with navbar `top-*` offset. */
+export const MARKET_TICKER_HEIGHT_CLASS = 'h-7';
+
+function formatUsdPrice(price: number) {
   if (!Number.isFinite(price)) return '--';
 
-  const decimals = price >= 1000 ? 0 : price >= 100 ? 2 : 4;
-  if (!currency) return price.toFixed(decimals);
-
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: Math.min(decimals, 2),
-      maximumFractionDigits: decimals,
-    }).format(price);
-  } catch {
-    return price.toFixed(decimals);
-  }
+  const abs = Math.abs(price);
+  const decimals = abs >= 1000 ? 0 : abs >= 100 ? 2 : abs >= 1 ? 2 : 4;
+  return `$${price.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })}`;
 }
 
 function formatChange(changePct: number) {
@@ -85,17 +80,16 @@ export function MarketTickerStrip() {
   }
 
   return (
-    <div className="relative w-full overflow-hidden border-y border-border/40 bg-background/70 backdrop-blur">
-      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-background to-transparent" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-background to-transparent" />
-
-      <div className="market-ticker-track flex w-max min-w-full items-center gap-8 py-2">
+    <div
+      className={`fixed top-0 left-0 right-0 z-40 w-full overflow-hidden bg-background/95 backdrop-blur-sm supports-backdrop-filter:bg-background/60 ${MARKET_TICKER_HEIGHT_CLASS}`}
+    >
+      <div className="market-ticker-track flex h-full w-max min-w-full items-center gap-8 px-3">
         {loopedItems.map((item, index) => {
           const isPositive = item.changePct >= 0;
           return (
             <div key={`${item.id}-${index}`} className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm">
               <span className="font-semibold tracking-tight text-blue-600 dark:text-blue-400">{item.label}</span>
-              <span className="text-amber-700 dark:text-amber-300">{formatPrice(item.price, item.currency)}</span>
+              <span className="text-foreground/90">{formatUsdPrice(item.price)}</span>
               <span className={isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
                 {formatChange(item.changePct)}
               </span>

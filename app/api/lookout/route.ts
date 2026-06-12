@@ -30,7 +30,6 @@ import {
   youtubeSearchTool,
   redditSearchTool,
   stockChartTool,
-  indianStockChartTool,
   currencyConverterTool,
   coinDataTool,
   coinOhlcTool,
@@ -50,12 +49,6 @@ import {
   trendingTvTool,
   textTranslateTool,
   predictionSearchTool,
-  binanceTickerTool,
-  binanceKlineTool,
-  binanceOrderbookTool,
-  growwQuoteTool,
-  growwHistoricalCandleTool,
-  growwPriceForecastTool,
 } from '@/lib/tools';
 import { ChatMessage } from '@/lib/types';
 import { type UIMessageStreamWriter } from 'ai';
@@ -79,7 +72,6 @@ function truncateMarkdown(text: string, maxLength: number): string {
 const STATIC_TOOLS: Record<string, any> = {
   youtube_search: youtubeSearchTool,
   stock_chart: stockChartTool,
-  indian_stock_chart: indianStockChartTool,
   currency_converter: currencyConverterTool,
   coin_data: coinDataTool,
   coin_ohlc: coinOhlcTool,
@@ -97,12 +89,6 @@ const STATIC_TOOLS: Record<string, any> = {
   trending_movies: trendingMoviesTool,
   trending_tv: trendingTvTool,
   text_translate: textTranslateTool,
-  binance_ticker: binanceTickerTool,
-  binance_kline: binanceKlineTool,
-  binance_orderbook: binanceOrderbookTool,
-  groww_quote: growwQuoteTool,
-  groww_historical_candle: growwHistoricalCandleTool,
-  groww_price_forecast: growwPriceForecastTool,
   academic_search: academicSearchTool,
   reddit_search: redditSearchTool,
   x_search: xSearchTool,
@@ -136,8 +122,6 @@ const SEARCH_MODE_TOOLS: Record<string, readonly string[]> = {
   reddit: ['reddit_search', 'datetime'],
   github: ['extreme_search'],
   stocks: ['stock_chart', 'currency_converter', 'datetime'],
-  ise: ['indian_stock_chart', 'currency_converter', 'datetime'],
-  groww: ['groww_quote', 'groww_historical_candle', 'groww_price_forecast', 'datetime'],
   code: ['code_context'],
   x: ['x_search'],
   chat: [],
@@ -153,10 +137,6 @@ const SEARCH_MODE_TOOLS: Record<string, readonly string[]> = {
     'web_search',
     'x_search',
     'reddit_search',
-    'binance_ticker',
-    'binance_kline',
-    'groww_quote',
-    'groww_historical_candle',
     'datetime',
   ],
 };
@@ -288,27 +268,6 @@ ${isFinAgent
 ### Stock Chart Tool
 - **Purpose**: Get stock market data and charts
 - **Output**: Stock analysis with current prices and trends`,
-    ise: `
-
-## TOOL GUIDELINES
-
-### Indian Stock Chart Tool (indian_stock_chart)
-- **Purpose**: NSE/BSE equities in INR via Yahoo Finance (.NS / .BO)
-- **MANDATORY**: Use for any Indian company or index comparison on Indian exchanges
-- **DO NOT** use \`stock_chart\` — use \`indian_stock_chart\` only
-- **Output**: Price history chart + narrative in INR`,
-    groww: `
-
-## TOOL GUIDELINES
-
-### Groww Trade API Tools
-- **\`groww_quote\`**: Live quote snapshot for an Indian market instrument
-- **\`groww_historical_candle\`**: Historical OHLC candles by date range
-- **\`groww_price_forecast\`**: Model-based future scenario projection from historical candles
-- Use exchange/segment carefully:
-  - Equities/index cash: NSE or BSE + CASH
-  - Derivatives: NFO + FNO
-  - Commodities: MCX + COMMODITY`,
     code: `
 
 ## TOOL GUIDELINES
@@ -354,10 +313,6 @@ You are a professional crypto and financial intelligence analyst. Produce instit
 | \`x_search\` | Real-time X/Twitter social sentiment | For narrative tracking |
 | \`reddit_search\` | Community sentiment on Reddit | For crypto community sentiment |
 | \`extreme_search\` | Deep multi-source research | For thorough research |
-| \`binance_ticker\` | Live Binance spot prices | For real-time exchange data |
-| \`binance_kline\` | Binance candlestick/OHLC data | For exchange-level charts |
-| \`groww_quote\` | Live NSE/BSE/F&O quote snapshot | For Indian market live quote checks |
-| \`groww_historical_candle\` | Historical candles for Indian symbols | For trend analysis on Groww instruments |
 | \`datetime\` | Current date/time | For timestamping reports |
 
 ### Tool Orchestration Strategy — CRITICAL

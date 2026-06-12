@@ -20,8 +20,10 @@ interface Lookout {
   timezone: string;
   nextRunAt: Date;
   status: 'active' | 'paused' | 'archived' | 'running';
+  searchMode?: string;
   lastRunAt?: Date | null;
   lastRunChatId?: string | null;
+  runHistory?: any[];
   createdAt: Date;
   cronSchedule?: string;
 }
@@ -64,14 +66,13 @@ export function useLookouts() {
       }
       throw new Error(result.error || 'Failed to load lookouts');
     },
-    staleTime: 1000 * 2, // Consider data fresh for 2 seconds
-    refetchInterval: 1000 * 5, // Refetch every 5 seconds for real-time updates
-    refetchIntervalInBackground: false, // Don't poll when tab is not focused
-    gcTime: 1000 * 30, // Keep in cache for 30 seconds
-    networkMode: 'always', // Always try to refetch
+    staleTime: 1000 * 30,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
+    gcTime: 1000 * 60,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    refetchOnMount: true, // Always refetch when component mounts
+    refetchOnMount: true,
     retry: (failureCount, error) => {
       // Retry up to 3 times with exponential backoff
       if (failureCount < 3) return true;
@@ -131,6 +132,7 @@ export function useLookouts() {
       time: string;
       timezone: string;
       date?: string;
+      searchMode?: string;
       onSuccess?: () => void;
     }) => {
       const { onSuccess: successCallback, ...mutationParams } = params;
@@ -216,6 +218,7 @@ export function useLookouts() {
       frequency: 'once' | 'daily' | 'weekly' | 'monthly';
       time: string;
       timezone: string;
+      searchMode?: string;
       onSuccess?: () => void;
     }) => {
       const { onSuccess: successCallback, ...mutationParams } = params;
@@ -345,7 +348,7 @@ export function useLookouts() {
       if (currentRunning) {
         queryClient.invalidateQueries({ queryKey: lookoutKeys.lists() });
       }
-    }, 3000); // Check every 3 seconds when there are running lookouts
+    }, 10000);
 
     return () => clearInterval(interval);
   }, [lookouts, queryClient]);

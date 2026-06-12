@@ -18,6 +18,22 @@ import { ShareButton } from '@/components/share';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { RepeatIcon, Copy01Icon, CpuIcon } from '@hugeicons/core-free-icons';
 import { ChatMessage, CustomUIDataTypes, DataQueryCompletionPart, DataExtremeSearchPart } from '@/lib/types';
+
+type XaiMultiAgentToolPart = {
+  type: 'tool-xai_web_search' | 'tool-xai_x_search';
+  state: 'input-streaming' | 'input-available' | 'output-available' | 'output-error';
+  input?: Record<string, unknown>;
+  output?: unknown;
+  errorText?: string;
+};
+
+function isXaiMultiAgentToolPart(part: ChatMessage['parts'][number]) {
+  return part.type === 'tool-xai_web_search' || part.type === 'tool-xai_x_search';
+}
+
+function getXaiMultiAgentToolLabel(partType: XaiMultiAgentToolPart['type']) {
+  return partType === 'tool-xai_x_search' ? 'X Search' : 'Web Search';
+}
 import { UseChatHelpers } from '@ai-sdk/react';
 import { BharatXLogoHeader } from '@/components/scira-logo-header';
 import Image from 'next/image';
@@ -77,6 +93,7 @@ import { CoinData as CryptoCoinsData } from '@/components/crypto-coin-data';
 import { CurrencyConverter } from '@/components/currency_conv';
 import { YouTubeSearchResults } from '@/components/youtube-search-results';
 import { ConnectorsSearchResults } from '@/components/connectors-search-results';
+import PredictionSearch from '@/components/prediction-search';
 import { CodeInterpreterView, NearbySearchSkeleton } from '@/components/tool-invocation-list-view';
 
 // Components that require browser APIs (Leaflet, charts) - load dynamically with ssr: false
@@ -1932,6 +1949,76 @@ export const MessagePartRenderer = memo<MessagePartRendererProps>(
               case 'output-available':
                 return (
                   <CryptoCoinsData result={part.output} contractAddress={part.input.contractAddress} key={`${messageIndex}-${partIndex}-tool`} />
+                );
+            }
+            break;
+
+          case 'tool-xai_web_search':
+          case 'tool-xai_x_search': {
+            const mergedXaiToolParts = parts.filter(isXaiMultiAgentToolPart) as XaiMultiAgentToolPart[];
+            const mergedFirstXaiToolIndex = parts.findIndex(isXaiMultiAgentToolPart);
+
+            if (partIndex !== mergedFirstXaiToolIndex) {
+              return null;
+            }
+
+            const labels = mergedXaiToolParts.map((toolPart: XaiMultiAgentToolPart) =>
+              getXaiMultiAgentToolLabel(toolPart.type),
+            );
+            const hasError = mergedXaiToolParts.some(
+              (toolPart: XaiMultiAgentToolPart) => toolPart.state === 'output-error',
+            );
+            const errorText = mergedXaiToolParts.find(
+              (toolPart: XaiMultiAgentToolPart) => toolPart.state === 'output-error',
+            )?.errorText;
+            const counts = labels.reduce<Record<string, number>>((acc: Record<string, number>, label: string) => {
+              acc[label] = (acc[label] ?? 0) + 1;
+              return acc;
+            }, {});
+            const summary = Object.entries(counts)
+              .map(([label, count]) => {
+                const pluralLabel = label === 'Web Search' ? 'Web Searches' : label;
+                return count > 1 ? `${count} ${pluralLabel}` : label;
+              })
+              .join(' · ');
+            const activityLabel = hasError ? summary : `Running ${summary}`;
+
+            return (
+              <div key={`${messageIndex}-${partIndex}-tool`} className="my-1.5">
+                <div
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] bg-background/70',
+                    hasError
+                      ? 'border-red-500/20 text-red-600 dark:text-red-300'
+                      : 'border-border/60 text-muted-foreground',
+                  )}
+                >
+                  <Globe className="h-3 w-3 shrink-0" />
+                  <span className="font-medium">{activityLabel}</span>
+                  {hasError && errorText ? (
+                    <span className="max-w-[200px] truncate text-[11px]" title={errorText}>
+                      {errorText}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            );
+          }
+
+          case 'tool-prediction_search':
+            switch (part.state) {
+              case 'input-streaming':
+              case 'input-available':
+              case 'output-available':
+                const predictionSearchInput = part.input;
+                const predictionSearchOutput = part.output;
+                return (
+                  <PredictionSearch
+                    key={`${messageIndex}-${partIndex}-tool`}
+                    result={predictionSearchOutput || null}
+                    args={predictionSearchInput ? predictionSearchInput : {}}
+                    annotations={annotations as DataQueryCompletionPart[]}
+                  />
                 );
             }
             break;

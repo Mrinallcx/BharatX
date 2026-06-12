@@ -16,13 +16,33 @@ type TickerRow = {
   symbol: string;
   price: number;
   changePct: number;
-  currency?: string;
   source: InstrumentSource;
   delayed?: boolean;
   asOf: string;
 };
 
+type RawTickerRow = TickerRow & { currency?: string };
+
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+
+/** Yahoo `INR=X` / `JPY=X` = units of local currency per 1 USD */
+async function fetchUsdPerLocalCurrency(symbol: 'INR=X' | 'JPY=X'): Promise<number | null> {
+  try {
+    const quote = await yf.quote(symbol);
+    const rate = Number(quote.regularMarketPrice);
+    return Number.isFinite(rate) && rate > 0 ? rate : null;
+  } catch {
+    return null;
+  }
+}
+
+function toUsd(price: number, currency: string | undefined, fx: { inrPerUsd: number | null; jpyPerUsd: number | null }): number {
+  if (!Number.isFinite(price)) return price;
+  if (!currency || currency === 'USD') return price;
+  if (currency === 'INR' && fx.inrPerUsd) return price / fx.inrPerUsd;
+  if (currency === 'JPY' && fx.jpyPerUsd) return price / fx.jpyPerUsd;
+  return price;
+}
 
 const DEFAULT_INSTRUMENTS: InstrumentSpec[] = [
   // India
@@ -41,7 +61,7 @@ const DEFAULT_INSTRUMENTS: InstrumentSpec[] = [
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
-async function fetchYahooTicker(spec: InstrumentSpec): Promise<TickerRow | null> {
+async function fetchYahooTicker(spec: InstrumentSpec): Promise<RawTickerRow | null> {
   try {
     const quote = await yf.quote(spec.symbol);
     const price = Number(quote.regularMarketPrice ?? quote.postMarketPrice ?? quote.preMarketPrice);
@@ -70,7 +90,7 @@ async function fetchYahooTicker(spec: InstrumentSpec): Promise<TickerRow | null>
   }
 }
 
-async function fetchBinanceTicker(spec: InstrumentSpec): Promise<TickerRow | null> {
+async function fetchBinanceTicker(spec: InstrumentSpec): Promise<RawTickerRow | null> {
   try {
     const response = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${encodeURIComponent(spec.symbol)}`, {
       headers: { Accept: 'application/json' },
@@ -89,7 +109,7 @@ async function fetchBinanceTicker(spec: InstrumentSpec): Promise<TickerRow | nul
       symbol: spec.symbol,
       price,
       changePct,
-      currency: spec.currency,
+      currency: 'USD',
       source: 'binance',
       delayed: false,
       asOf: data.closeTime ? new Date(data.closeTime).toISOString() : new Date().toISOString(),
@@ -99,16 +119,31 @@ async function fetchBinanceTicker(spec: InstrumentSpec): Promise<TickerRow | nul
   }
 }
 
-async function loadOneTicker(spec: InstrumentSpec): Promise<TickerRow | null> {
+async function loadOneTicker(spec: InstrumentSpec): Promise<RawTickerRow | null> {
   return spec.source === 'yahoo' ? fetchYahooTicker(spec) : fetchBinanceTicker(spec);
 }
 
+function normalizeToUsd(row: RawTickerRow, fx: { inrPerUsd: number | null; jpyPerUsd: number | null }): TickerRow {
+  const { currency, ...rest } = row;
+  return {
+    ...rest,
+    price: toUsd(row.price, currency, fx),
+  };
+}
+
 export async function GET() {
-  const settled = await Promise.allSettled(DEFAULT_INSTRUMENTS.map((instrument) => loadOneTicker(instrument)));
+  const [inrPerUsd, jpyPerUsd, settled] = await Promise.all([
+    fetchUsdPerLocalCurrency('INR=X'),
+    fetchUsdPerLocalCurrency('JPY=X'),
+    Promise.allSettled(DEFAULT_INSTRUMENTS.map((instrument) => loadOneTicker(instrument))),
+  ]);
+
+  const fx = { inrPerUsd, jpyPerUsd };
   const items = settled
-    .filter((entry): entry is PromiseFulfilledResult<TickerRow | null> => entry.status === 'fulfilled')
+    .filter((entry): entry is PromiseFulfilledResult<RawTickerRow | null> => entry.status === 'fulfilled')
     .map((entry) => entry.value)
-    .filter((item): item is TickerRow => item !== null);
+    .filter((item): item is RawTickerRow => item !== null)
+    .map((item) => normalizeToUsd(item, fx));
 
   return Response.json(
     {
@@ -118,7 +153,7 @@ export async function GET() {
     },
     {
       headers: {
-        'Cache-Control': 'public, s-maxage=20, stale-while-revalidate=40',
+        'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=20',
       },
     },
   );

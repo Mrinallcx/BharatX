@@ -1,0 +1,74 @@
+<!doctype html>
+<!--
+  Toto + local test — embed snippet (reference copy)
+
+  1) Add docs/widget-register-toto.env.example lines to BharatX .env.local and restart dev.
+  2) Run BharatX on http://localhost:3000 (pnpm dev).
+  3) Either:
+     - Run your partner app (e.g. Toto) on another port such as http://localhost:3001 and paste
+       the script block below into that app’s layout (see in-page comment), or
+     - Serve THIS file from another port, e.g. npx serve docs -p 3333
+       → http://localhost:3333/widget-embed-snippet-toto.html
+     CORS matches hostname only ("localhost"); port does not matter ✓
+
+  For production Toto: replace script/api URLs with your live BharatX origin (https://…).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Embed test — BharatX widget</title>
+  </head>
+  <body>
+    <main style="max-width: 640px; margin: 2rem auto; font-family: system-ui, sans-serif">
+      <h1>Sample partner page</h1>
+      <p>
+        This block is long enough for the widget to summarize. Toto Finance style copy: tokenized
+        commodities, settlement, and global markets. Add more real content on your real site.
+      </p>
+      <p>
+        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut
+        labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco
+        laboris nisi ut aliquip ex ea commodo consequat.
+      </p>
+    </main>
+
+    <!-- BharatX on :3000, this page on :3001 (or any host listed in WIDGET_SITES_JSON) -->
+    <script
+      src="http://localhost:3000/widget/v1.js"
+      defer
+      data-api-base="http://localhost:3000"
+    ></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        if (window.BharatXWidget && BharatXWidget.init) {
+          BharatXWidget.init({
+            siteKey: 'bxw-embed-7c2a9f1e-b4d3-4e8a-9c2f-toto-2026',
+            selector: 'main',
+          });
+        }
+      });
+    </script>
+
+    <!--
+    ========== PRODUCTION (paste on www.totofinance.xyz) ==========
+    Replace YOUR_PRODUCTION_BHARATX_DOMAIN, e.g. https://bharat0x.xyz
+
+    <script
+      src="https://YOUR_PRODUCTION_BHARATX_DOMAIN/widget/v1.js"
+      defer
+      data-api-base="https://YOUR_PRODUCTION_BHARATX_DOMAIN"
+    ></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        if (window.BharatXWidget && BharatXWidget.init) {
+          BharatXWidget.init({
+            siteKey: 'bxw-embed-7c2a9f1e-b4d3-4e8a-9c2f-toto-2026',
+            selector: 'main',
+          });
+        }
+      });
+    </script>
+    -->
+  </body>
+</html>

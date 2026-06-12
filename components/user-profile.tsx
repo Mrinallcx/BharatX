@@ -82,6 +82,17 @@ const NavigationMenu = memo(() => {
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent className="w-[240px] z-[110] mr-5">
+        <DropdownMenuItem
+          disabled
+          className="opacity-50 cursor-not-allowed pointer-events-none"
+          onSelect={(event) => event.preventDefault()}
+        >
+          <GearIcon size={16} />
+          <span>Settings</span>
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
         <DropdownMenuItem className="cursor-pointer" asChild>
           <Link href="/xql" className="w-full flex items-center gap-2">
             <XLogoIcon size={16} />
@@ -89,18 +100,22 @@ const NavigationMenu = memo(() => {
           </Link>
         </DropdownMenuItem>
 
-        <DropdownMenuItem className="cursor-pointer" asChild>
-          <Link href="/about" className="w-full flex items-center gap-2">
-            <InfoIcon size={16} />
-            <span>About</span>
-          </Link>
+        <DropdownMenuItem
+          disabled
+          className="opacity-50 cursor-not-allowed pointer-events-none"
+          onSelect={(event) => event.preventDefault()}
+        >
+          <InfoIcon size={16} />
+          <span>About</span>
         </DropdownMenuItem>
 
-        <DropdownMenuItem className="cursor-pointer" asChild>
-          <Link href="/blog" className="w-full flex items-center gap-2">
-            <BookIcon size={16} />
-            <span>Blog</span>
-          </Link>
+        <DropdownMenuItem
+          disabled
+          className="opacity-50 cursor-not-allowed pointer-events-none"
+          onSelect={(event) => event.preventDefault()}
+        >
+          <BookIcon size={16} />
+          <span>Blog</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

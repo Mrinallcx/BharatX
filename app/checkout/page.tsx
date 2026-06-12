@@ -210,7 +210,7 @@ export default function CheckoutPage() {
             Checkout
           </h1>
           <p className="text-zinc-600 dark:text-zinc-400 text-lg leading-relaxed">
-            Complete your one-time payment for Scira Pro
+            Complete your one-time payment for BharatX Pro
           </p>
 
           {/* Coming Soon Notice */}

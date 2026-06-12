@@ -1,6 +1,7 @@
 // Component exports for easier importing
 export { Navbar } from './navbar';
 export { StatusBadge } from './status-badge';
+export { RunStatusBadge } from './run-status-badge';
 export { LookoutSkeleton, LoadingSkeletons } from './loading-skeleton';
 export { EmptyState, NoActiveLookoutsEmpty, NoArchivedLookoutsEmpty } from './empty-state';
 export { WarningCard, TotalLimitWarning, DailyLimitWarning } from './warning-card';

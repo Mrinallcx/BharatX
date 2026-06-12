@@ -19,7 +19,7 @@ import {
 } from '@/ai/providers';
 import { X, Check, ChevronsUpDown, Wand2, Upload, CheckIcon, Zap, Sparkles, ArrowUpRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog';
-import { cn, SearchGroup, SearchGroupId, getSearchGroups, SearchProvider } from '@/lib/utils';
+import { cn, SearchGroup, SearchGroupId, getSearchGroups, SearchProvider, isSearchGroupComingSoon } from '@/lib/utils';
 
 import { track } from '@vercel/analytics';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -41,11 +41,19 @@ import {
 } from '@hugeicons/core-free-icons';
 import { AudioLinesIcon } from '@/components/ui/audio-lines';
 import { GripIcon } from '@/components/ui/grip';
+import TextRotate from '@/components/ui/text-rotate';
+import { Plus, ChevronDown } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import { Switch } from '@/components/ui/switch';
 import { UseChatHelpers } from '@ai-sdk/react';
+
+/** Models available to all users in the picker (not Pro-gated). */
+const SELECTABLE_FREE_MODELS = new Set([
+  'bharatx-grok-4-fast-think',
+  'bharatx-kimi-k2-6-think',
+]);
 import { ChatMessage } from '@/lib/types';
 import { useLocation } from '@/hooks/use-location';
 import { useLocalStorage } from '@/hooks/use-local-storage';
@@ -64,31 +72,18 @@ const ProBadge = ({ className = '' }: { className?: string }) => (
   </span>
 );
 
-// Group Icon Component - handles custom logos (like Binance) and regular icons
-const GroupIcon = ({ 
-  groupId, 
-  icon, 
-  size = 24, 
-  className = '' 
-}: { 
-  groupId: string; 
-  icon: any; 
-  size?: number; 
+// Group Icon Component
+const GroupIcon = ({
+  groupId: _groupId,
+  icon,
+  size = 24,
+  className = '',
+}: {
+  groupId: string;
+  icon: any;
+  size?: number;
   className?: string;
 }) => {
-  if (groupId === 'binance') {
-    // Reduce Binance logo size to 70% of the requested size
-    const binanceSize = Math.round(size * 0.7);
-    return (
-      <Image
-        src="/binance-logo.svg"
-        alt="Binance"
-        width={binanceSize}
-        height={binanceSize}
-        className={cn('object-contain', className)}
-      />
-    );
-  }
   return <HugeiconsIcon icon={icon} size={size} color="currentColor" strokeWidth={2} className={className} />;
 };
 
@@ -609,8 +604,8 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
                   const requiresAuth = requiresAuthentication(model.value) && !user;
                   const requiresPro = requiresProSubscription(model.value) && !isProUser;
                   const isLocked = requiresAuth || requiresPro;
-                  // Only allow Grok 4 Fast Thinking to be clickable
-                  const isNotAllowed = model.value !== 'bharatx-grok-4-fast-think';
+                  // Only allow selectable free models to be clickable
+                  const isNotAllowed = !SELECTABLE_FREE_MODELS.has(model.value);
 
                   if (isLocked || isNotAllowed) {
                     return (
@@ -845,8 +840,8 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
                   const requiresAuth = requiresAuthentication(model.value) && !user;
                   const requiresPro = requiresProSubscription(model.value) && !isProUser;
                   const isLocked = requiresAuth || requiresPro;
-                  // Only allow Grok 4 Fast Thinking to be clickable
-                  const isNotAllowed = model.value !== 'bharatx-grok-4-fast-think';
+                  // Only allow selectable free models to be clickable
+                  const isNotAllowed = !SELECTABLE_FREE_MODELS.has(model.value);
 
                   if (isLocked || isNotAllowed) {
                     return (
@@ -1856,6 +1851,10 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
         const selectedGroup = visibleGroups.find((g) => g.id === currentValue);
 
         if (selectedGroup) {
+          if (isSearchGroupComingSoon(selectedGroup.id)) {
+            return;
+          }
+
           // Check if this is a Pro-only group and user is not Pro
           if ('requirePro' in selectedGroup && selectedGroup.requirePro && !isProUser && onOpenSettings) {
             // Open settings to upgrade
@@ -1929,16 +1928,22 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
         <CommandList className="max-h-[240px]">
           <CommandGroup>
             <div className="px-2 py-1 text-[10px] font-medium text-muted-foreground">Search Mode</div>
-            {orderedVisibleGroups.map((group) => (
+            {orderedVisibleGroups.map((group) => {
+              const isComingSoon = isSearchGroupComingSoon(group.id);
+              return (
               <CommandItem
                 key={group.id}
                 value={group.id}
-                onSelect={(value) => handleGroupSelect(value)}
+                onSelect={(value) => {
+                  if (isComingSoon) return;
+                  handleGroupSelect(value);
+                }}
                 className={cn(
                   'flex items-center justify-between px-2 py-2 mb-0.5 rounded-lg text-xs',
                   'transition-all duration-200',
-                  'hover:bg-accent',
-                  'data-[selected=true]:bg-accent',
+                  isComingSoon
+                    ? 'opacity-50 cursor-not-allowed pointer-events-none'
+                    : 'hover:bg-accent data-[selected=true]:bg-accent',
                 )}
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1 pr-4">
@@ -1946,20 +1951,27 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
                   <div className="flex flex-col min-w-0 flex-1">
                     <div className="flex items-center gap-1">
                       <span className="font-medium truncate text-[11px] text-foreground">{group.name}</span>
-                      {'requirePro' in group && group.requirePro && !isProUser && (
-                        <span className="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-medium bg-primary/10 text-primary border border-primary/20">
-                          PRO
+                      {isComingSoon ? (
+                        <span className="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-medium bg-muted text-muted-foreground border border-border/60">
+                          Coming soon
                         </span>
+                      ) : (
+                        'requirePro' in group && group.requirePro && !isProUser && (
+                          <span className="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-medium bg-primary/10 text-primary border border-primary/20">
+                            PRO
+                          </span>
+                        )
                       )}
                     </div>
                     <div className="text-[9px] text-muted-foreground truncate leading-tight text-wrap!">
-                      {group.description}
+                      {isComingSoon ? 'Available in a future update' : group.description}
                     </div>
                   </div>
                 </div>
                 <Check className={cn('ml-auto h-4 w-4', selectedGroup === group.id ? 'opacity-100' : 'opacity-0')} />
               </CommandItem>
-            ))}
+            );
+            })}
           </CommandGroup>
         </CommandList>
       </Command>
@@ -2063,14 +2075,24 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
                 </DrawerHeader>
                 <div className="px-4 pb-6 max-h-[calc(80vh-100px)] overflow-y-auto">
                   <div className="space-y-2">
-                    {orderedVisibleGroups.map((group) => (
+                    {orderedVisibleGroups.map((group) => {
+                      const isComingSoon = isSearchGroupComingSoon(group.id);
+                      return (
                       <button
                         key={group.id}
-                        onClick={() => handleGroupSelect(group.id)}
+                        type="button"
+                        disabled={isComingSoon}
+                        onClick={() => {
+                          if (isComingSoon) return;
+                          handleGroupSelect(group.id);
+                        }}
                         className={cn(
                           'w-full flex items-center justify-between p-4 rounded-lg text-left transition-all',
-                          'border border-border hover:bg-accent',
-                          selectedGroup === group.id ? 'bg-accent border-primary/20' : 'bg-background',
+                          'border border-border',
+                          isComingSoon
+                            ? 'opacity-50 cursor-not-allowed bg-muted/30'
+                            : 'hover:bg-accent bg-background',
+                          !isComingSoon && selectedGroup === group.id ? 'bg-accent border-primary/20' : '',
                         )}
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -2078,13 +2100,21 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
                           <div className="flex flex-col min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-sm text-foreground">{group.name}</span>
-                              {'requirePro' in group && group.requirePro && !isProUser && (
-                                <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-primary/10 text-primary border border-primary/20">
-                                  PRO
+                              {isComingSoon ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-muted text-muted-foreground border border-border/60">
+                                  Coming soon
                                 </span>
+                              ) : (
+                                'requirePro' in group && group.requirePro && !isProUser && (
+                                  <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                                    PRO
+                                  </span>
+                                )
                               )}
                             </div>
-                            <div className="text-xs text-muted-foreground mt-0.5">{group.description}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {isComingSoon ? 'Available in a future update' : group.description}
+                            </div>
                           </div>
                         </div>
                         <Check
@@ -2094,7 +2124,8 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
                           )}
                         />
                       </button>
-                    ))}
+                    );
+                    })}
                   </div>
                 </div>
               </DrawerContent>
@@ -2321,7 +2352,16 @@ const FormComponent: React.FC<FormComponentProps> = ({
 
   // Reset selectedGroup to 'web' if it's set to a disabled group
   useEffect(() => {
-    const disabledGroups = ['connectors', 'code', 'academic', 'chat', 'memory', 'youtube'];
+    const disabledGroups = [
+      'connectors',
+      'code',
+      'academic',
+      'chat',
+      'memory',
+      'youtube',
+      'crypto',
+      'prediction',
+    ];
     if (disabledGroups.includes(selectedGroup)) {
       setSelectedGroup('web');
     }
@@ -2736,6 +2776,10 @@ const FormComponent: React.FC<FormComponentProps> = ({
 
   const handleGroupSelect = useCallback(
     (group: SearchGroup) => {
+      if (isSearchGroupComingSoon(group.id)) {
+        return;
+      }
+
       if (!isEnhancing && !isTypewriting) {
         setSelectedGroup(group.id);
         
@@ -3659,22 +3703,17 @@ const FormComponent: React.FC<FormComponentProps> = ({
                       : isTypewriting
                         ? '✨ Writing enhanced prompt...'
                         : hasInteracted
-                          ? 'Ask a new question...'
-                          : 'Ask a question...'
+                          ? 'Ask a follow-up...'
+                          : ''
                   }
                   value={input}
                   onChange={handleInput}
                   disabled={isEnhancing || isTypewriting}
                   onInput={(e) => {
-                    // Auto-resize textarea based on content
                     const target = e.target as HTMLTextAreaElement;
-
-                    // Reset height to auto first to get the actual scroll height
                     target.style.height = 'auto';
-
                     const scrollHeight = target.scrollHeight;
-                    const maxHeight = 300; // Increased max height for desktop
-
+                    const maxHeight = 300;
                     if (scrollHeight > maxHeight) {
                       target.style.height = `${maxHeight}px`;
                       target.style.overflowY = 'auto';
@@ -3682,8 +3721,6 @@ const FormComponent: React.FC<FormComponentProps> = ({
                       target.style.height = `${scrollHeight}px`;
                       target.style.overflowY = 'hidden';
                     }
-
-                    // Ensure the cursor position is visible by scrolling to bottom if needed
                     requestAnimationFrame(() => {
                       const cursorPosition = target.selectionStart;
                       if (cursorPosition === target.value.length) {
@@ -3692,17 +3729,20 @@ const FormComponent: React.FC<FormComponentProps> = ({
                     });
                   }}
                   className={cn(
-                    'w-full rounded-xl rounded-b-none md:text-base!',
-                    'text-base leading-relaxed',
-                    '!bg-muted',
-                    '!border-0',
-                    'text-foreground',
-                    'focus:!ring-0 focus-visible:!ring-0',
-                    '!px-4 !py-4',
+                    'w-full rounded-xl rounded-b-none text-[16px]!',
+                    'leading-normal',
+                    'border-0!',
+                    'text-foreground!',
+                    'focus:ring-0! focus-visible:ring-0!',
+                    'min-h-0!',
+                    'px-4! py-3.5!',
                     'touch-manipulation',
-                    'whatsize',
-                    '!shadow-none',
-                    'transition-all duration-200',
+                    'whatsize!',
+                    'shadow-none!',
+                    'transition-colors duration-200',
+                    !input && !hasInteracted && !isEnhancing && !isTypewriting && !isRecording
+                      ? 'bg-transparent!'
+                      : 'bg-muted!',
                     (isEnhancing || isTypewriting) && 'text-muted-foreground cursor-wait',
                   )}
                   style={{
@@ -3720,36 +3760,124 @@ const FormComponent: React.FC<FormComponentProps> = ({
                 />
               )}
 
+              {/* Rotating placeholder overlay */}
+              {!isRecording && !input && !isEnhancing && !isTypewriting && !hasInteracted && (
+                <div className="absolute top-0 left-0 right-0 pointer-events-none z-10 px-4 py-[14px]">
+                  <TextRotate
+                    texts={['Ask anything...', 'Search crypto, stocks, web & more...']}
+                    rotationInterval={3000}
+                    splitBy="words"
+                    staggerDuration={0.04}
+                    staggerFrom="first"
+                    transition={{ type: 'spring', damping: 30, stiffness: 400 }}
+                    mainClassName="text-[16px] leading-normal text-muted-foreground/90 font-sans"
+                  />
+                </div>
+              )}
+
               {/* Toolbar as a separate block - no absolute positioning */}
               <div
                 className={cn(
-                  'flex justify-between items-center rounded-t-none rounded-b-xl',
-                  '!bg-muted',
-                  '!border-0',
-                  'p-2 gap-2 shadow-none',
+                  'flex items-center rounded-t-none rounded-b-xl',
+                  'bg-muted!',
+                  'border-0!',
+                  'px-2.5 py-2 gap-1.5 shadow-none',
                   'transition-all duration-200',
                   (isEnhancing || isTypewriting) && 'pointer-events-none',
-                  isRecording && '!bg-muted text-muted-foreground',
+                  isRecording && 'bg-muted! text-muted-foreground!',
                 )}
               >
-                <div className={cn('flex items-center gap-2')}>
-                  <GroupModeToggle
-                    selectedGroup={selectedGroup}
-                    onGroupSelect={handleGroupSelect}
-                    status={status}
-                    onOpenSettings={onOpenSettings}
-                    isProUser={isProUser}
-                  />
+                {/* Left: Plus menu + active mode badge */}
+                <div className="flex items-center gap-1.5">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className="flex items-center justify-center size-8 rounded-full border border-foreground/25 text-foreground/70 bg-foreground/12 hover:bg-foreground/18 hover:text-foreground hover:border-foreground/35 transition-colors"
+                        aria-label="More options"
+                      >
+                        <Plus className="size-[18px]" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-64 p-1 font-sans rounded-lg bg-popover border shadow-lg"
+                      align="start"
+                      side="bottom"
+                      sideOffset={4}
+                    >
+                      <div className="my-0.5 mx-2 border-t border-border/40" />
+                      <div className="px-2.5 pt-1.5 pb-0.5">
+                        <span className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-widest">Search Modes</span>
+                      </div>
+                      <div className="relative pb-1">
+                        <div className="max-h-40 overflow-y-auto pb-8">
+                          {(() => {
+                            const dynamicGroups = getSearchGroups();
+                            return dynamicGroups
+                              .filter((g) => g.show && g.id !== 'extreme' && g.id !== 'connectors' && g.id !== 'code' && g.id !== 'memory' && g.id !== 'chat' && g.id !== 'academic' && g.id !== 'youtube')
+                              .map((group) => {
+                                const isSelected = selectedGroup === group.id;
+                                const isComingSoon = isSearchGroupComingSoon(group.id);
+                                return (
+                                  <Tooltip key={group.id} delayDuration={200}>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        type="button"
+                                        disabled={isComingSoon}
+                                        className={cn(
+                                          'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left transition-colors',
+                                          isComingSoon
+                                            ? 'opacity-50 cursor-not-allowed'
+                                            : 'hover:bg-accent',
+                                          isSelected && !isComingSoon && 'bg-accent',
+                                        )}
+                                        onClick={() => {
+                                          if (isComingSoon) return;
+                                          handleGroupSelect(group as SearchGroup);
+                                        }}
+                                      >
+                                        <HugeiconsIcon icon={group.icon} size={16} color="currentColor" strokeWidth={1.5} />
+                                        <span className="flex-1 text-[13px]">{group.name}</span>
+                                        {isComingSoon ? (
+                                          <span className="text-[10px] font-medium text-muted-foreground">Coming soon</span>
+                                        ) : (
+                                          isSelected && <Check className="size-3.5 text-primary" />
+                                        )}
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="right" sideOffset={8} className="max-w-48 py-1.5 px-2.5">
+                                      <span className="text-[10px] leading-snug">
+                                        {isComingSoon ? 'Coming soon — available in a future update' : group.description}
+                                      </span>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                );
+                              });
+                          })()}
+                        </div>
+                        <div className="pointer-events-none absolute bottom-1 inset-x-0 flex justify-center pb-1 pt-5 bg-linear-to-t from-popover via-popover/90 to-transparent rounded-b-lg">
+                          <ChevronDown className="size-3.5 text-muted-foreground animate-bounce" />
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
 
-                  {/* Connectors disabled */}
-                  {false && selectedGroup === 'connectors' && setSelectedConnectors && (
-                    <ConnectorSelector
-                      selectedConnectors={selectedConnectors}
-                      onConnectorToggle={handleConnectorToggle}
-                      user={user}
-                      isProUser={isProUser}
-                    />
-                  )}
+                  {/* Active mode badge */}
+                  {(() => {
+                    const dynamicGroups = getSearchGroups();
+                    const activeGroup = dynamicGroups.find((g) => g.id === selectedGroup);
+                    const webGroup = dynamicGroups.find((g) => g.id === 'web');
+                    if (!activeGroup || activeGroup.id === 'web' || !webGroup) return null;
+                    return (
+                      <button
+                        className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-accent text-accent-foreground border border-border/40 hover:bg-accent/80 transition-colors"
+                        onClick={() => handleGroupSelect(webGroup as SearchGroup)}
+                      >
+                        <HugeiconsIcon icon={activeGroup.icon} size={12} color="currentColor" strokeWidth={1.5} />
+                        <span>{activeGroup.name}</span>
+                        <X className="size-3 ml-0.5 opacity-60" />
+                      </button>
+                    );
+                  })()}
 
                   <ModelSwitcher
                     selectedModel={selectedModel}
@@ -3771,7 +3899,9 @@ const FormComponent: React.FC<FormComponentProps> = ({
                   />
                 </div>
 
-                <div className={cn('flex items-center flex-shrink-0 gap-1')}>
+                <div className="flex-1" />
+
+                <div className={cn('flex items-center flex-shrink-0 gap-1.5')}>
                   {/* File upload button disabled */}
                   {false && hasVisionSupport(selectedModel) && (
                     <Tooltip delayDuration={300}>

@@ -5,12 +5,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import {
   NewTwitterIcon,
-  GlobalSearchIcon,
-  Bitcoin02Icon,
   AppleStocksIcon,
   ArrowRight01Icon,
   Cancel01Icon,
-  IndiaGateIcon,
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 
@@ -40,17 +37,6 @@ const categories: Category[] = [
   //   ],
   // },
   {
-    id: 'binance',
-    name: 'Binance',
-    icon: Bitcoin02Icon,
-    examples: [
-      { text: 'BTCUSDT price chart for the last week', group: 'binance' },
-      { text: 'Show me ETHUSDT candlestick data', group: 'binance' },
-      { text: 'What is the 24h volume for SOLUSDT?', group: 'binance' },
-      { text: 'BNBUSDT orderbook depth', group: 'binance' },
-    ],
-  },
-  {
     id: 'stocks',
     name: 'Stocks',
     icon: AppleStocksIcon,
@@ -59,17 +45,6 @@ const categories: Category[] = [
       { text: 'Compare AAPL vs MSFT stock charts', group: 'stocks' },
       { text: 'Latest Tesla earnings report analysis', group: 'stocks' },
       { text: 'S&P 500 market trend today', group: 'stocks' },
-    ],
-  },
-  {
-    id: 'ise',
-    name: 'ISE',
-    icon: IndiaGateIcon,
-    examples: [
-      { text: 'Reliance Industries NSE price and 1-year chart', group: 'ise' },
-      { text: 'Compare TCS vs Infosys stock performance in INR', group: 'ise' },
-      { text: 'HDFC Bank chart last 6 months', group: 'ise' },
-      { text: 'ITC Ltd BSE vs NSE price context', group: 'ise' },
     ],
   },
   {
@@ -105,18 +80,7 @@ const categories: Category[] = [
   //     { text: 'What are traders saying about the next Bitcoin halving?', group: 'multi-agent' },
   //     { text: 'Research the current state of AI regulation worldwide', group: 'multi-agent' },
   //   ],
-  // },
-  {
-    id: 'factcheck',
-    name: 'Fact Check',
-    icon: GlobalSearchIcon,
-    examples: [
-      { text: 'Is Bitcoin really limited to 21 million coins?', group: 'web' },
-      { text: 'Can quantum computers break Bitcoin?', group: 'web' },
-      { text: 'Verify: Ethereum uses proof of stake', group: 'web' },
-      { text: 'Is crypto mining bad for the environment?', group: 'web' },
-    ],
-  },
+  //   },
 ];
 
 interface ExampleCategoriesProps {

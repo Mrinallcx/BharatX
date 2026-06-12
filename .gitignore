@@ -39,6 +39,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# python venv (local market-data backfill)
+.venv-market-data/
+
 # IDE
 .vscode/
 

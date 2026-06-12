@@ -1,6 +1,7 @@
 import { wrapLanguageModel, customProvider, extractReasoningMiddleware, gateway } from 'ai';
 
 import { createOpenAI, openai } from '@ai-sdk/openai';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { xai } from '@ai-sdk/xai';
 import { groq } from '@ai-sdk/groq';
 import { mistral } from '@ai-sdk/mistral';
@@ -30,6 +31,12 @@ const anannas = createOpenAI({
     'X-Title': 'BharatX',
     'Content-Type': 'application/json',
   },
+});
+
+const moonshot = createOpenAICompatible({
+  name: 'moonshot',
+  baseURL: 'https://api.moonshot.ai/v1',
+  apiKey: process.env.MOONSHOT_API_KEY,
 });
 
 export const bharatX = customProvider({
@@ -116,7 +123,7 @@ export const bharatX = customProvider({
     }),
     'bharatx-cmd-a': cohere('command-a-03-2025'),
     'bharatx-cmd-a-think': cohere('command-a-reasoning-08-2025'),
-    'bharatx-kimi-k2-v2': groq('moonshotai/kimi-k2-instruct-0905'),
+    'bharatx-kimi-k2-6-think': moonshot('kimi-k2.6'),
     'bharatx-haiku': anannas.chat('anthropic/claude-3-5-haiku-20241022'),
     'bharatx-mistral-medium': mistral('mistral-medium-2508'),
     'bharatx-magistral-small': mistral('magistral-small-2509'),
@@ -173,6 +180,22 @@ export const models: Model[] = [
     freeUnlimited: false,
     maxOutputTokens: 16000,
     extreme: true,
+    fast: true,
+    isNew: true,
+  },
+  {
+    value: 'bharatx-kimi-k2-6-think',
+    label: 'Kimi K2.6 Thinking',
+    description: "Moonshot AI's advanced reasoning LLM",
+    vision: false,
+    reasoning: true,
+    experimental: false,
+    category: 'Free',
+    pdf: false,
+    pro: false,
+    requiresAuth: false,
+    freeUnlimited: false,
+    maxOutputTokens: 32768,
     fast: true,
     isNew: true,
   },
@@ -779,24 +802,6 @@ export const models: Model[] = [
       temperature: 0.6,
       topP: 0.95,
       minP: 0,
-    },
-  },
-  {
-    value: 'bharatx-kimi-k2-v2',
-    label: 'Kimi K2 Latest',
-    description: "MoonShot AI's advanced base LLM",
-    vision: false,
-    reasoning: false,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 10000,
-    fast: true,
-    parameters: {
-      temperature: 0.6,
     },
   },
   {

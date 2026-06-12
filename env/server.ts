@@ -5,6 +5,7 @@ import { z } from 'zod';
 export const serverEnv = createEnv({
   server: {
     XAI_API_KEY: z.string().min(1),
+    MOONSHOT_API_KEY: z.string().min(1),
     OPENAI_API_KEY: z.string().min(1),
     ANTHROPIC_API_KEY: z.string().min(1),
     GROQ_API_KEY: z.string().min(1),
@@ -37,8 +38,6 @@ export const serverEnv = createEnv({
     BLOB_READ_WRITE_TOKEN: z.string().min(1),
     SMITHERY_API_KEY: z.string().min(1),
     COINGECKO_API_KEY: z.string().min(1),
-    GROWW_ACCESS_TOKEN: z.string().optional(),
-    GROWW_API_VERSION: z.string().optional().default('1.0'),
     QSTASH_TOKEN: z.string().min(1),
     RESEND_API_KEY: z.string().min(1),
     SUPERMEMORY_API_KEY: z.string().min(1),

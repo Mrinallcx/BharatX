@@ -7,8 +7,19 @@ import { BinocularsIcon } from '@hugeicons/core-free-icons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BorderTrail } from '@/components/core/border-trail';
 import { StatusBadge } from './status-badge';
+import { RunStatusBadge, type LookoutRunStatus } from './run-status-badge';
 import { ActionButtons } from './action-buttons';
 import { formatNextRun } from '../utils/time-utils';
+
+interface LookoutRun {
+  runAt: string;
+  chatId: string;
+  status: LookoutRunStatus;
+  error?: string;
+  duration?: number;
+  tokensUsed?: number;
+  searchesPerformed?: number;
+}
 
 interface Lookout {
   id: string;
@@ -20,6 +31,7 @@ interface Lookout {
   status: 'active' | 'paused' | 'archived' | 'running';
   lastRunAt?: Date | null;
   lastRunChatId?: string | null;
+  runHistory?: LookoutRun[];
   createdAt: Date;
   cronSchedule?: string;
 }
@@ -43,6 +55,12 @@ export function LookoutCard({
   onOpenDetails,
   showActions = true,
 }: LookoutCardProps) {
+  const lastRunStatus = React.useMemo(() => {
+    const history = lookout.runHistory ?? [];
+    if (!history.length) return null;
+    return history[history.length - 1]?.status ?? null;
+  }, [lookout.runHistory]);
+
   const handleCardClick = () => {
     onOpenDetails(lookout);
   };
@@ -77,8 +95,9 @@ export function LookoutCard({
             <CardTitle className="text-base font-medium hover:text-primary transition-colors">
               {lookout.title}
             </CardTitle>
-            <CardDescription className="text-sm">
+            <CardDescription className="text-sm flex items-center gap-1.5">
               <StatusBadge status={lookout.status} />
+              {lastRunStatus && lookout.lastRunAt && <RunStatusBadge status={lastRunStatus} />}
             </CardDescription>
           </div>
 

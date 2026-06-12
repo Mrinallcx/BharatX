@@ -68,15 +68,7 @@ import {
   extremeSearchTool,
   createConnectorsSearchTool,
   codeContextTool,
-  binanceTickerTool,
-  binanceKlineTool,
-  binanceOrderbookTool,
-  binanceExchangeInfoTool,
-  growwQuoteTool,
-  growwHistoricalCandleTool,
-  growwPriceForecastTool,
   predictionSearchTool,
-  indianStockChartTool,
 } from '@/lib/tools';
 import { GroqProviderOptions } from '@ai-sdk/groq';
 import { markdownJoinerTransform } from '@/lib/parser';
@@ -87,6 +79,7 @@ import { getCachedCustomInstructionsByUserId } from '@/lib/user-data-server';
 import { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 import { unauthenticatedRateLimit, getClientIdentifier } from '@/lib/rate-limit';
 import { CohereChatModelOptions } from '@ai-sdk/cohere';
+import { isSearchGroupComingSoon } from '@/lib/utils';
 
 let globalStreamContext: ResumableStreamContext | null = null;
 
@@ -134,10 +127,12 @@ export async function POST(req: Request) {
   // Treat all users (including guests) as Pro users with full access
   const isProUser = true; // Always true - all features free for everyone
 
+  const effectiveGroup = isSearchGroupComingSoon(group) ? 'web' : group;
+
   // Per-request config only — never share a module-level promise: concurrent or
   // back-to-back POSTs would overwrite it and the wrong search mode's tools/prompt
   // would be used (e.g. X mode getting web/stocks tools mid-chat).
-  const groupConfigPromise = getGroupConfig(group);
+  const groupConfigPromise = getGroupConfig(effectiveGroup);
 
   // 2. Full user data (needed for usage checks and custom instructions)
   const fullUserPromise = lightweightUser ? getCurrentUser() : Promise.resolve(null);
@@ -261,7 +256,7 @@ export async function POST(req: Request) {
         });
       }
 
-      const shouldUseXaiMultiAgent = group === 'multi-agent';
+      const shouldUseXaiMultiAgent = group === 'multi-agent' && !isSearchGroupComingSoon('multi-agent');
 
       const setupTime = (Date.now() - requestStartTime) / 1000;
       console.log(`🚀 Time to streamText: ${setupTime.toFixed(2)}s`, shouldUseXaiMultiAgent ? '(multi-agent mode)' : '');
@@ -386,6 +381,16 @@ export async function POST(req: Request) {
               : {}),
             threshold: "OFF"
           } satisfies GoogleGenerativeAIProviderOptions,
+          moonshot: {
+            ...(model === 'bharatx-kimi-k2-6-think'
+              ? {
+                thinking: {
+                  type: 'enabled',
+                  keep: 'all',
+                },
+              }
+              : {}),
+          },
         },
         prepareStep: async ({ steps, messages }) => {
           // Multi-agent mode: keep tools available across all steps
@@ -442,19 +447,10 @@ export async function POST(req: Request) {
         tools: (() => {
           const baseTools = {
             stock_chart: stockChartTool,
-            indian_stock_chart: indianStockChartTool,
             currency_converter: currencyConverterTool,
             coin_data: coinDataTool,
             coin_data_by_contract: coinDataByContractTool,
             coin_ohlc: coinOhlcTool,
-
-            binance_ticker: binanceTickerTool,
-            binance_kline: binanceKlineTool,
-            binance_orderbook: binanceOrderbookTool,
-            binance_exchange_info: binanceExchangeInfoTool,
-            groww_quote: growwQuoteTool,
-            groww_historical_candle: growwHistoricalCandleTool,
-            groww_price_forecast: growwPriceForecastTool,
 
             x_search: xSearchTool,
             web_search: webSearchTool(dataStream, searchProvider),

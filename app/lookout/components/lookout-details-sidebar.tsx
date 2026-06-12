@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { BorderTrail } from '@/components/core/border-trail';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import Link from 'next/link';
+import { LOOKOUT_SEARCH_MODES } from '../constants';
 
 interface LookoutRun {
   runAt: string;
@@ -41,6 +42,7 @@ interface LookoutWithHistory {
   timezone: string;
   nextRunAt: Date;
   status: 'active' | 'paused' | 'archived' | 'running';
+  searchMode?: string;
   lastRunAt?: Date | null;
   lastRunChatId?: string | null;
   runHistory: LookoutRun[];
@@ -337,7 +339,19 @@ export function LookoutDetailsSidebar({
 
               <div className="p-3 bg-muted/50 rounded-md border gap-2">
                 <p className="text-xs leading-relaxed">{lookout.prompt}</p>
-                <p className="text-xs leading-relaxed border-t mt-2 pt-2">Grok 4・Extreme Research</p>
+                <p className="text-xs leading-relaxed border-t mt-2 pt-2 flex items-center gap-1.5">
+                  {(() => {
+                    const mode = LOOKOUT_SEARCH_MODES.find((m) => m.value === (lookout.searchMode || 'extreme'));
+                    return mode ? (
+                      <>
+                        <HugeiconsIcon icon={mode.icon} size={12} color="currentColor" strokeWidth={1.5} />
+                        <span>Grok 4 · {mode.label}</span>
+                      </>
+                    ) : (
+                      <span>Grok 4 · Extreme Research</span>
+                    );
+                  })()}
+                </p>
               </div>
             </div>
 

@@ -15,7 +15,7 @@ import { ProgressRing } from '@/components/ui/progress-ring';
 import { cn } from '@/lib/utils';
 import { TimezoneSelector } from './timezone-selector';
 import { TimePicker } from './time-picker';
-import { frequencyOptions, dayOfWeekOptions, LOOKOUT_LIMITS } from '../constants';
+import { frequencyOptions, dayOfWeekOptions, LOOKOUT_LIMITS, LOOKOUT_SEARCH_MODES } from '../constants';
 import { LookoutFormHookReturn } from '../hooks/use-lookout-form';
 
 interface LookoutFormProps {
@@ -45,6 +45,7 @@ export function LookoutForm({
     selectedTimezone,
     selectedDate,
     selectedDayOfWeek,
+    selectedSearchMode,
     selectedExample,
     editingLookout,
     setSelectedFrequency,
@@ -52,6 +53,7 @@ export function LookoutForm({
     setSelectedTimezone,
     setSelectedDate,
     setSelectedDayOfWeek,
+    setSelectedSearchMode,
     createLookoutFromForm,
     updateLookoutFromForm,
   } = formHook;
@@ -95,6 +97,28 @@ export function LookoutForm({
             required
           />
         </div>
+      </div>
+
+      {/* Search Mode Selection */}
+      <div className="space-y-1.5">
+        <Label className="text-sm font-medium text-muted-foreground">Mode</Label>
+        <input type="hidden" name="searchMode" value={selectedSearchMode} />
+        <Select value={selectedSearchMode} onValueChange={setSelectedSearchMode}>
+          <SelectTrigger className="h-9 rounded-lg text-sm">
+            <SelectValue placeholder="Select search mode" />
+          </SelectTrigger>
+          <SelectContent>
+            {LOOKOUT_SEARCH_MODES.map((mode) => (
+              <SelectItem key={mode.value} value={mode.value}>
+                <div className="flex items-center gap-2">
+                  <HugeiconsIcon icon={mode.icon} size={14} color="currentColor" strokeWidth={1.5} />
+                  <span>{mode.label}</span>
+                  <span className="text-muted-foreground text-xs">· {mode.description}</span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Frequency Selection */}

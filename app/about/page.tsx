@@ -100,7 +100,7 @@ export default function AboutPage() {
               <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
                 <ShieldCheck className="h-4 w-4" />
                 <span className="text-sm font-medium">
-                  Scira is not connected to any cryptocurrency tokens or coins. We are purely an AI search engine.
+                  BharatX is not connected to any cryptocurrency tokens or coins. We are purely an AI search engine.
                 </span>
               </div>
               <button
@@ -138,7 +138,7 @@ export default function AboutPage() {
                 Terms of Service
               </h3>
               <p className="text-xs text-muted-foreground">
-                By using Scira, you agree to our Terms of Service which outline the rules for using our platform.
+                By using BharatX, you agree to our Terms of Service which outline the rules for using our platform.
               </p>
               <Link href="/terms" className="text-xs text-primary hover:underline inline-flex items-center">
                 Read full Terms of Service
@@ -190,7 +190,7 @@ export default function AboutPage() {
             {/* Logo */}
             <Link href="/" className="flex justify-items-end gap-1.5 group">
               <BharatXLogo className="size-7 transition-transform group-hover:scale-110" />
-              <span className="text-2xl font-normal tracking-tighter font-be-vietnam-pro">Scira</span>
+              <span className="text-2xl font-normal tracking-tighter font-be-vietnam-pro">BharatX</span>
             </Link>
 
             {/* Desktop Navigation */}
@@ -226,7 +226,7 @@ export default function AboutPage() {
             {/* Right Side Actions */}
             <div className="flex items-center gap-4">
               <Link
-                href="https://git.new/scira"
+                href="https://github.com/Mrinallcx/BharatX"
                 className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
                 target="_blank"
               >
@@ -263,7 +263,7 @@ export default function AboutPage() {
           <div className="space-y-6">
             <div className="flex items-end justify-center gap-1 mb-8">
               <BharatXLogo className="size-12" />
-              <h1 className="text-4xl font-normal font-be-vietnam-pro tracking-tighter">Scira</h1>
+              <h1 className="text-4xl font-normal font-be-vietnam-pro tracking-tighter">BharatX</h1>
             </div>
 
             <h2 className="text-2xl md:text-3xl font-semibold text-foreground max-w-3xl mx-auto">
@@ -299,7 +299,7 @@ export default function AboutPage() {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
-              href="https://git.new/scira"
+              href="https://github.com/Mrinallcx/BharatX"
               className="inline-flex h-11 items-center gap-2 px-6 rounded-lg bg-foreground text-background hover:bg-foreground/90 transition-colors"
               target="_blank"
             >
@@ -397,15 +397,15 @@ export default function AboutPage() {
 
           <div className="text-center">
             <a
-              href="https://openalternative.co/scira?utm_source=openalternative&utm_medium=badge&utm_campaign=embed&utm_content=tool-scira"
+              href="https://github.com/Mrinallcx/BharatX"
               target="_blank"
               className="inline-block"
             >
               <Image
-                src="https://openalternative.co/scira/badge.svg?theme=dark&width=200&height=50"
+                src="https://img.shields.io/github/stars/Mrinallcx/BharatX?style=social"
                 width={200}
                 height={50}
-                alt="Scira badge"
+                alt="BharatX badge"
                 className="mx-auto"
               />
             </a>
@@ -544,7 +544,7 @@ export default function AboutPage() {
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted/30 border border-border/30">
               <span className="text-sm text-muted-foreground">Powered by the best</span>
               <Button asChild variant="ghost" size="sm" className="h-6 px-2 text-xs text-primary hover:text-primary/80">
-                <Link href="https://git.new/scira" target="_blank">
+                <Link href="https://github.com/Mrinallcx/BharatX" target="_blank">
                   View source
                   <ArrowUpRight className="ml-1 h-3 w-3" />
                 </Link>
@@ -1067,7 +1067,7 @@ export default function AboutPage() {
         <div className="container max-w-4xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-2xl font-semibold mb-4">Frequently Asked Questions</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">Find answers to common questions about Scira</p>
+            <p className="text-muted-foreground max-w-2xl mx-auto">Find answers to common questions about BharatX</p>
           </div>
 
           <ProAccordion type="single" collapsible className="w-full">
@@ -1105,17 +1105,17 @@ export default function AboutPage() {
             </ProAccordionItem>
 
             <ProAccordionItem value="item-5">
-              <ProAccordionTrigger>What AI models does Scira use?</ProAccordionTrigger>
+              <ProAccordionTrigger>What AI models does BharatX use?</ProAccordionTrigger>
               <ProAccordionContent>
-                Scira uses a range of advanced AI models including Grok, Claude, OpenAI GPT, Gemini, and more to provide
+                BharatX uses a range of advanced AI models including Grok, Claude, OpenAI GPT, Gemini, and more to provide
                 the best possible answers for different types of queries.
               </ProAccordionContent>
             </ProAccordionItem>
 
             <ProAccordionItem value="item-6">
-              <ProAccordionTrigger>How does Scira ensure information accuracy?</ProAccordionTrigger>
+              <ProAccordionTrigger>How does BharatX ensure information accuracy?</ProAccordionTrigger>
               <ProAccordionContent>
-                Scira combines RAG technology with search grounding to retrieve information from reliable sources and
+                BharatX combines RAG technology with search grounding to retrieve information from reliable sources and
                 verify it before providing answers. Each response includes source attribution for transparency.
               </ProAccordionContent>
             </ProAccordionItem>
@@ -1133,7 +1133,7 @@ export default function AboutPage() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 px-4 sm:px-6 py-4 rounded-xl bg-muted/40 border border-border/40 max-w-lg mx-auto">
               <div className="text-center sm:text-left flex-1">
                 <p className="text-sm font-medium text-foreground">Ready to get started?</p>
-                <p className="text-xs text-muted-foreground">Join thousands using Scira</p>
+                <p className="text-xs text-muted-foreground">Join thousands using BharatX</p>
               </div>
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                 <Button onClick={() => router.push('/')} size="sm" className="px-4 py-2 text-sm w-full sm:w-auto">
@@ -1159,7 +1159,7 @@ export default function AboutPage() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-3">
               <BharatXLogo className="size-8" />
-              <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Scira. All rights reserved.</p>
+              <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} BharatX. All rights reserved.</p>
             </div>
 
             <div className="flex items-center gap-6">
@@ -1174,14 +1174,14 @@ export default function AboutPage() {
               </Link>
               <div className="flex items-center gap-2">
                 <Link
-                  href="https://x.com/sciraai"
+                  href="https://github.com/Mrinallcx/BharatX"
                   className="p-2 text-muted-foreground hover:text-foreground transition-colors"
                   target="_blank"
                 >
                   <XLogoIcon className="h-4 w-4" />
                 </Link>
                 <Link
-                  href="https://git.new/scira"
+                  href="https://github.com/Mrinallcx/BharatX"
                   className="p-2 text-muted-foreground hover:text-foreground transition-colors"
                   target="_blank"
                 >

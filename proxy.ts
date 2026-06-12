@@ -37,11 +37,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
-  // Redirect settings route to main page
-  if (pathname.startsWith('/settings')) {
-    return NextResponse.redirect(new URL('/', request.url));
-  }
-
   // All routes accessible to everyone - no authentication required
 
   return NextResponse.next();

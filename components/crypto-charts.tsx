@@ -723,15 +723,41 @@ const CryptoChart: React.FC<CryptoChartProps> = memo(({ result, coinId, chartTyp
     return `$${value.toFixed(2)}`;
   };
 
-  // Safe date formatting for candlestick charts
+  const dataInterval = result?.interval || '';
+
   const formatDate = (dateStr: string) => {
     try {
       const date = new Date(dateStr);
       if (isNaN(date.getTime())) return dateStr;
 
-      const month = date.toLocaleString('en-US', { month: 'short' });
-      const year = date.getFullYear().toString().slice(2);
-      return `${month} '${year}`;
+      const intraday = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h'];
+      const daily = ['1d', '3d'];
+      const weekly = ['1w'];
+
+      if (intraday.includes(dataInterval)) {
+        return date.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      }
+
+      if (daily.includes(dataInterval) || weekly.includes(dataInterval)) {
+        return date.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+      }
+
+      if (dataInterval === '1M') {
+        return date.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+      }
+
+      const totalSpanMs = formattedData.length > 1
+        ? new Date(formattedData[formattedData.length - 1].date).getTime() - new Date(formattedData[0].date).getTime()
+        : 0;
+      const totalSpanDays = totalSpanMs / (1000 * 60 * 60 * 24);
+
+      if (totalSpanDays <= 2) {
+        return date.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      } else if (totalSpanDays <= 180) {
+        return date.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+      } else {
+        return `${date.toLocaleString('en-US', { month: 'short' })} '${date.getFullYear().toString().slice(2)}`;
+      }
     } catch {
       return dateStr;
     }
@@ -741,9 +767,8 @@ const CryptoChart: React.FC<CryptoChartProps> = memo(({ result, coinId, chartTyp
     if (chartType !== 'candlestick') return value;
 
     try {
-      // Show every few ticks to avoid overcrowding
-      const interval = Math.max(1, Math.floor(formattedData.length / 6));
-      if (index % interval === 0 || index === 0 || index === formattedData.length - 1) {
+      const tickInterval = Math.max(1, Math.floor(formattedData.length / 6));
+      if (index % tickInterval === 0 || index === 0 || index === formattedData.length - 1) {
         return formatDate(value);
       }
       return '';
