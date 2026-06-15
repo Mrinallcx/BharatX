@@ -108,6 +108,18 @@ function createAgentThorFetch(): typeof fetch {
   };
 }
 
+/** Disables Kimi thinking so forced tool_choice works (TA, Agent Thor, etc.). */
+function createMoonshotThinkingDisabledFetch(): typeof fetch {
+  return async (url, init) => {
+    if (init?.body && typeof init.body === 'string') {
+      const body = JSON.parse(init.body) as Record<string, unknown>;
+      body.thinking = { type: 'disabled' };
+      init = { ...init, body: JSON.stringify(body) };
+    }
+    return fetch(url as RequestInfo, init);
+  };
+}
+
 const moonshotAgentThorProvider = createOpenAICompatible({
   name: 'moonshot-thor',
   baseURL: 'https://api.moonshot.ai/v1',
@@ -117,6 +129,20 @@ const moonshotAgentThorProvider = createOpenAICompatible({
 
 /** Kimi K2.6 with Moonshot $web_search builtin + thinking on synthesis steps. */
 export const moonshotAgentThorModel = moonshotAgentThorProvider('kimi-k2.6');
+
+const moonshotToolFlowProvider = createOpenAICompatible({
+  name: 'moonshot-toolflow',
+  baseURL: 'https://api.moonshot.ai/v1',
+  apiKey: process.env.MOONSHOT_API_KEY,
+  fetch: createMoonshotThinkingDisabledFetch(),
+});
+
+/** Kimi K2.6 with thinking disabled — required when prepareStep forces a tool. */
+export const moonshotToolFlowModel = moonshotToolFlowProvider('kimi-k2.6');
+
+export function isKimiThinkingModel(modelId: string): boolean {
+  return modelId === 'bharatx-kimi-k2-6-think';
+}
 
 const groqQwen32b = wrapLanguageModel({
   model: groq('qwen/qwen3-32b'),

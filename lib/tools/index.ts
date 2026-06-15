@@ -23,3 +23,4 @@ export { createConnectorsSearchTool } from './connectors-search';
 export { createMemoryTools, type SearchMemoryTool, type AddMemoryTool } from './supermemory';
 export { codeContextTool } from './code-context';
 export { predictionSearchTool } from './prediction-search';
+export { technicalAnalysisTool } from './technical-analysis';

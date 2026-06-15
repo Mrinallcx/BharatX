@@ -35,6 +35,7 @@ export type SearchGroupId =
   | 'code'
   | 'connectors'
   | 'prediction'
+  | 'technical'
   | 'multi-agent'
   | 'agent-thor';
 
@@ -165,6 +166,13 @@ export function getSearchGroups(searchProvider: SearchProvider = 'parallel') {
       name: 'Agent Thor',
       description: 'High-agency web research powered by Kimi',
       icon: MicroscopeIcon,
+      show: true,
+    },
+    {
+      id: 'technical' as const,
+      name: 'Technical Analysis',
+      description: 'Indicator-based analysis for stocks & crypto. Type / to pick indicators',
+      icon: Chart03Icon,
       show: true,
     },
   ] as const;

@@ -65,6 +65,8 @@ import { createMemoryTools } from '@/lib/tools/supermemory';
 import {
   bharatX,
   moonshotAgentThorModel,
+  moonshotToolFlowModel,
+  isKimiThinkingModel,
   shouldBypassRateLimits,
   getModelParameters,
   hasReasoningSupport,
@@ -114,6 +116,7 @@ import {
   createConnectorsSearchTool,
   codeContextTool,
   predictionSearchTool,
+  technicalAnalysisTool,
 } from '@/lib/tools';
 import { GroqProviderOptions } from '@ai-sdk/groq';
 import { markdownJoinerTransform } from '@/lib/parser';
@@ -159,6 +162,7 @@ export async function POST(req: Request) {
     isCustomInstructionsEnabled,
     searchProvider,
     selectedConnectors,
+    technicalAnalysis,
   } = await req.json();
   const { latitude, longitude } = geolocation(req);
   const streamId = 'stream-' + uuidv7();
@@ -303,14 +307,27 @@ export async function POST(req: Request) {
 
       const shouldUseXaiMultiAgent = group === 'multi-agent' && !isSearchGroupComingSoon('multi-agent');
       const shouldUseAgentThor = group === 'agent-thor' && !isSearchGroupComingSoon('agent-thor');
+      const shouldUseTechnicalAnalysis = group === 'technical' && !isSearchGroupComingSoon('technical');
+
+      const taIndicators: string[] = Array.isArray(technicalAnalysis?.indicators) ? technicalAnalysis.indicators : [];
+      const taTimeframe = technicalAnalysis?.timeframe ?? '1d';
 
       // Agent Thor always runs on Kimi K2.6 regardless of the user's picked model
       const effectiveModelId = shouldUseAgentThor ? 'bharatx-kimi-k2-6-think' : model;
 
       const setupTime = (Date.now() - requestStartTime) / 1000;
+      const useMoonshotToolFlow =
+        shouldUseTechnicalAnalysis && isKimiThinkingModel(model);
+
       console.log(
         `🚀 Time to streamText: ${setupTime.toFixed(2)}s`,
-        shouldUseXaiMultiAgent ? '(multi-agent mode)' : shouldUseAgentThor ? '(agent-thor mode)' : '',
+        shouldUseXaiMultiAgent
+          ? '(multi-agent mode)'
+          : shouldUseAgentThor
+            ? '(agent-thor mode)'
+            : shouldUseTechnicalAnalysis
+              ? '(technical analysis mode)'
+              : '',
       );
 
       const streamStartTime = Date.now();
@@ -320,7 +337,9 @@ export async function POST(req: Request) {
           ? xai.responses('grok-4.20-multi-agent')
           : shouldUseAgentThor
             ? moonshotAgentThorModel
-            : bharatX.languageModel(effectiveModelId),
+            : useMoonshotToolFlow
+              ? moonshotToolFlowModel
+              : bharatX.languageModel(effectiveModelId),
         messages: await convertToModelMessages(messages),
         ...getModelParameters(shouldUseXaiMultiAgent ? 'grok-4.20-multi-agent' : effectiveModelId),
         stopWhen: stepCountIs(shouldUseAgentThor ? 6 : 5),
@@ -455,6 +474,7 @@ export async function POST(req: Request) {
               : {}),
           },
           'moonshot-thor': {},
+          'moonshot-toolflow': {},
         },
         prepareStep: async ({ steps, messages }) => {
           // Multi-agent mode: keep tools available across all steps
@@ -463,6 +483,19 @@ export async function POST(req: Request) {
               toolChoice: 'auto' as const,
               activeTools: ['xai_web_search', 'xai_x_search'],
             };
+          }
+
+          // Technical Analysis: force the deterministic technical_analysis tool first,
+          // then switch to synthesis so the model only interprets the computed values.
+          if (shouldUseTechnicalAnalysis) {
+            const hasRunTA = steps.some((step) => step.toolCalls.some((tc) => tc.toolName === 'technical_analysis'));
+            if (!hasRunTA) {
+              return {
+                toolChoice: { type: 'tool' as const, toolName: 'technical_analysis' },
+                activeTools: ['technical_analysis'],
+              };
+            }
+            return { toolChoice: 'none' as const, activeTools: [] };
           }
 
           // Agent Thor: enforce tool order (charts → search → synthesis)
@@ -619,6 +652,7 @@ export async function POST(req: Request) {
             greeting: greetingTool(timezone),
             code_context: codeContextTool,
             prediction_search: predictionSearchTool(dataStream),
+            technical_analysis: technicalAnalysisTool({ indicators: taIndicators, timeframe: taTimeframe }),
           };
 
           const toolsWithXai = shouldUseXaiMultiAgent

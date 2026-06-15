@@ -23,6 +23,13 @@ import {
 import { X, Check, ChevronsUpDown, Wand2, Upload, CheckIcon, Zap, Sparkles, ArrowUpRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog';
 import { cn, SearchGroup, SearchGroupId, getSearchGroups, SearchProvider, isSearchGroupComingSoon } from '@/lib/utils';
+import {
+  INDICATOR_DEFS,
+  CATEGORY_LABELS,
+  CATEGORY_ORDER,
+  MAX_INDICATORS,
+  getIndicatorMeta,
+} from '@/lib/ta/indicators-meta';
 
 import { track } from '@vercel/analytics';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -41,6 +48,7 @@ import {
   Crown02Icon,
   DocumentAttachmentIcon,
   ConnectIcon,
+  Chart03Icon,
 } from '@hugeicons/core-free-icons';
 import { AudioLinesIcon } from '@/components/ui/audio-lines';
 import { GripIcon } from '@/components/ui/grip';
@@ -1614,6 +1622,10 @@ interface FormComponentProps {
   onOpenSettings?: (tab?: string) => void;
   selectedConnectors?: ConnectorProvider[];
   setSelectedConnectors?: React.Dispatch<React.SetStateAction<ConnectorProvider[]>>;
+  technicalIndicators?: string[];
+  setTechnicalIndicators?: React.Dispatch<React.SetStateAction<string[]>>;
+  technicalTimeframe?: string;
+  setTechnicalTimeframe?: React.Dispatch<React.SetStateAction<string>>;
 }
 
 interface GroupSelectorProps {
@@ -2294,6 +2306,142 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
 
 GroupModeToggle.displayName = 'GroupModeToggle';
 
+const TA_TIMEFRAMES: { id: string; label: string }[] = [
+  { id: '1h', label: '1H' },
+  { id: '4h', label: '4H' },
+  { id: '1d', label: '1D' },
+  { id: '1w', label: '1W' },
+];
+
+interface TechnicalIndicatorBarProps {
+  selected: string[];
+  onChange: (next: string[]) => void;
+  timeframe: string;
+  onTimeframeChange: (tf: string) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+const TechnicalIndicatorBar: React.FC<TechnicalIndicatorBarProps> = React.memo(
+  ({ selected, onChange, timeframe, onTimeframeChange, open, onOpenChange }) => {
+    const atMax = selected.length >= MAX_INDICATORS;
+
+    const toggle = useCallback(
+      (id: string) => {
+        if (selected.includes(id)) {
+          onChange(selected.filter((s) => s !== id));
+        } else if (!atMax) {
+          onChange([...selected, id]);
+        }
+      },
+      [selected, onChange, atMax],
+    );
+
+    return (
+      <div className="border-b border-primary/20 bg-gradient-to-r from-primary/[0.06] via-primary/[0.03] to-transparent dark:from-primary/[0.12] dark:via-primary/[0.06]">
+        <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1">
+          <HugeiconsIcon icon={Chart03Icon} size={14} className="text-primary/80" strokeWidth={2} />
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-primary/80">Indicators</span>
+          <span className="text-[10px] text-muted-foreground/80">· type / to add · max {MAX_INDICATORS}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2.5">
+          <Popover open={open} onOpenChange={onOpenChange}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-md border border-dashed border-primary/35 bg-background/60 px-2 py-1 text-xs font-medium text-primary/90 transition-colors hover:border-primary/50 hover:bg-primary/5"
+              >
+                <Plus className="size-3.5" />
+                {selected.length === 0 ? 'Add indicator' : 'Add'}
+                <span className="font-mono text-[10px] text-muted-foreground">/</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" side="top" className="w-[320px] p-0">
+              <Command>
+                <CommandInput placeholder={`Search indicators (${selected.length}/${MAX_INDICATORS})...`} className="h-9" />
+                <CommandList className="max-h-[300px]">
+                  <CommandEmpty>No indicator found.</CommandEmpty>
+                  {CATEGORY_ORDER.map((category) => {
+                    const items = INDICATOR_DEFS.filter((d) => d.category === category);
+                    if (items.length === 0) return null;
+                    return (
+                      <CommandGroup key={category} heading={`${CATEGORY_LABELS[category]} (Phase ${items[0].phase})`}>
+                        {items.map((def) => {
+                          const isSelected = selected.includes(def.id);
+                          const disabled = !isSelected && atMax;
+                          return (
+                            <CommandItem
+                              key={def.id}
+                              value={`${def.label} ${def.short} ${def.id}`}
+                              onSelect={() => toggle(def.id)}
+                              disabled={disabled}
+                              className={cn('flex items-center gap-2', disabled && 'opacity-40')}
+                            >
+                              <Check className={cn('h-4 w-4 shrink-0', isSelected ? 'opacity-100' : 'opacity-0')} />
+                              <div className="flex min-w-0 flex-col">
+                                <span className="truncate text-sm font-medium">{def.label}</span>
+                                <span className="truncate text-[11px] text-muted-foreground">{def.short}</span>
+                              </div>
+                              {def.needs !== 'price' && (
+                                <span className="ml-auto shrink-0 rounded bg-accent px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+                                  {def.needs}
+                                </span>
+                              )}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    );
+                  })}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+
+          {selected.map((id) => {
+            const meta = getIndicatorMeta(id);
+            if (!meta) return null;
+            return (
+              <span
+                key={id}
+                className="inline-flex items-center gap-1 rounded-md border border-primary/25 bg-primary/10 px-2 py-1 font-mono text-xs font-semibold tracking-tight text-primary"
+              >
+                {meta.label}
+                <button
+                  type="button"
+                  onClick={() => onChange(selected.filter((s) => s !== id))}
+                  className="text-primary/60 transition-colors hover:text-primary"
+                  aria-label={`Remove ${meta.label}`}
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            );
+          })}
+
+          <div className="ml-auto flex shrink-0 items-center gap-0.5 rounded-md border border-border/60 bg-background/50 p-0.5">
+            {TA_TIMEFRAMES.map((tf) => (
+              <button
+                key={tf.id}
+                type="button"
+                onClick={() => onTimeframeChange(tf.id)}
+                className={cn(
+                  'rounded px-2 py-0.5 font-mono text-[11px] font-medium transition-colors',
+                  timeframe === tf.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {tf.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  },
+);
+
+TechnicalIndicatorBar.displayName = 'TechnicalIndicatorBar';
+
 const FormComponent: React.FC<FormComponentProps> = ({
   chatId,
   user,
@@ -2319,8 +2467,14 @@ const FormComponent: React.FC<FormComponentProps> = ({
   onOpenSettings,
   selectedConnectors = [],
   setSelectedConnectors,
+  technicalIndicators = [],
+  setTechnicalIndicators,
+  technicalTimeframe = '1d',
+  setTechnicalTimeframe,
 }) => {
   const [uploadQueue, setUploadQueue] = useState<Array<string>>([]);
+  const [taMenuOpen, setTaMenuOpen] = useState(false);
+  const isTechnicalMode = selectedGroup === 'technical';
   const isMounted = useRef(true);
   const isCompositionActive = useRef(false);
   const postSubmitFileInputRef = useRef<HTMLInputElement>(null);
@@ -2780,6 +2934,13 @@ const FormComponent: React.FC<FormComponentProps> = ({
       event.preventDefault();
       const newValue = event.target.value;
 
+      // In Technical Analysis mode, typing "/" opens the indicator picker.
+      if (isTechnicalMode && newValue === '/') {
+        setTaMenuOpen(true);
+        setInput('');
+        return;
+      }
+
       if (newValue.length > MAX_INPUT_CHARS) {
         setInput(newValue);
         toast.error(`Your input exceeds the maximum of ${MAX_INPUT_CHARS} characters.`);
@@ -2787,7 +2948,7 @@ const FormComponent: React.FC<FormComponentProps> = ({
         setInput(newValue);
       }
     },
-    [setInput],
+    [setInput, isTechnicalMode],
   );
 
   const handleGroupSelect = useCallback(
@@ -3680,8 +3841,21 @@ const FormComponent: React.FC<FormComponentProps> = ({
                 'relative rounded-xl !bg-muted border border-border/60 focus-within:border-ring/50 transition-all duration-200',
                 'border-0',
                 (isEnhancing || isTypewriting) && '!bg-muted',
+                isTechnicalMode && 'overflow-hidden',
               )}
             >
+              {/* TA indicator strip — inside input box, above query text */}
+              {isTechnicalMode && setTechnicalIndicators && (
+                <TechnicalIndicatorBar
+                  selected={technicalIndicators}
+                  onChange={(next) => setTechnicalIndicators(next)}
+                  timeframe={technicalTimeframe}
+                  onTimeframeChange={(tf) => setTechnicalTimeframe?.(tf)}
+                  open={taMenuOpen}
+                  onOpenChange={setTaMenuOpen}
+                />
+              )}
+
               {isRecording ? (
                 <Textarea
                   ref={inputRef}
@@ -3711,73 +3885,102 @@ const FormComponent: React.FC<FormComponentProps> = ({
                   rows={1}
                 />
               ) : (
-                <Textarea
-                  ref={inputRef}
-                  placeholder={
-                    isEnhancing
-                      ? '✨ Enhancing your prompt...'
-                      : isTypewriting
-                        ? '✨ Writing enhanced prompt...'
-                        : hasInteracted
-                          ? 'Ask a follow-up...'
-                          : ''
-                  }
-                  value={input}
-                  onChange={handleInput}
-                  disabled={isEnhancing || isTypewriting}
-                  onInput={(e) => {
-                    const target = e.target as HTMLTextAreaElement;
-                    target.style.height = 'auto';
-                    const scrollHeight = target.scrollHeight;
-                    const maxHeight = 300;
-                    if (scrollHeight > maxHeight) {
-                      target.style.height = `${maxHeight}px`;
-                      target.style.overflowY = 'auto';
-                    } else {
-                      target.style.height = `${scrollHeight}px`;
-                      target.style.overflowY = 'hidden';
-                    }
-                    requestAnimationFrame(() => {
-                      const cursorPosition = target.selectionStart;
-                      if (cursorPosition === target.value.length) {
-                        target.scrollTop = target.scrollHeight;
-                      }
-                    });
-                  }}
-                  className={cn(
-                    'w-full rounded-xl rounded-b-none text-[16px]!',
-                    'leading-normal',
-                    'border-0!',
-                    'text-foreground!',
-                    'focus:ring-0! focus-visible:ring-0!',
-                    'min-h-0!',
-                    'px-4! py-3.5!',
-                    'touch-manipulation',
-                    'whatsize!',
-                    'shadow-none!',
-                    'transition-colors duration-200',
-                    !input && !hasInteracted && !isEnhancing && !isTypewriting && !isRecording
-                      ? 'bg-transparent!'
-                      : 'bg-muted!',
-                    (isEnhancing || isTypewriting) && 'text-muted-foreground cursor-wait',
-                  )}
-                  style={{
-                    WebkitUserSelect: 'text',
-                    WebkitTouchCallout: 'none',
-                    minHeight: undefined,
-                    resize: 'none',
-                  }}
-                  rows={1}
-                  autoFocus={!isEnhancing && !isTypewriting}
-                  onCompositionStart={() => (isCompositionActive.current = true)}
-                  onCompositionEnd={() => (isCompositionActive.current = false)}
-                  onKeyDown={isEnhancing || isTypewriting ? undefined : handleKeyDown}
-                  onPaste={isEnhancing || isTypewriting ? undefined : handlePaste}
-                />
+                <>
+                  <div className={cn(isTechnicalMode && 'relative px-4')}>
+                    {isTechnicalMode && (
+                      <div className="pt-2 pb-0.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">Query</span>
+                      </div>
+                    )}
+                    <div className={cn(isTechnicalMode && 'relative')}>
+                      <Textarea
+                        ref={inputRef}
+                        placeholder={
+                          isEnhancing
+                            ? '✨ Enhancing your prompt...'
+                            : isTypewriting
+                              ? '✨ Writing enhanced prompt...'
+                              : isTechnicalMode
+                                ? hasInteracted
+                                  ? 'Ask about the asset — e.g. Analyze AAPL trend...'
+                                  : ''
+                                : hasInteracted
+                                  ? 'Ask a follow-up...'
+                                  : ''
+                        }
+                        value={input}
+                        onChange={handleInput}
+                        disabled={isEnhancing || isTypewriting}
+                        onInput={(e) => {
+                          const target = e.target as HTMLTextAreaElement;
+                          target.style.height = 'auto';
+                          const scrollHeight = target.scrollHeight;
+                          const maxHeight = 300;
+                          if (scrollHeight > maxHeight) {
+                            target.style.height = `${maxHeight}px`;
+                            target.style.overflowY = 'auto';
+                          } else {
+                            target.style.height = `${scrollHeight}px`;
+                            target.style.overflowY = 'hidden';
+                          }
+                          requestAnimationFrame(() => {
+                            const cursorPosition = target.selectionStart;
+                            if (cursorPosition === target.value.length) {
+                              target.scrollTop = target.scrollHeight;
+                            }
+                          });
+                        }}
+                        className={cn(
+                          'w-full rounded-xl rounded-b-none text-[16px]!',
+                          'leading-normal',
+                          'border-0!',
+                          'text-foreground!',
+                          'focus:ring-0! focus-visible:ring-0!',
+                          'min-h-0!',
+                          'touch-manipulation',
+                          'whatsize!',
+                          'shadow-none!',
+                          'transition-colors duration-200',
+                          isTechnicalMode ? '!px-0 !pt-1 !pb-3.5' : 'px-4! py-3.5!',
+                          !input && !hasInteracted && !isEnhancing && !isTypewriting && !isRecording && !isTechnicalMode
+                            ? 'bg-transparent!'
+                            : 'bg-muted!',
+                          (isEnhancing || isTypewriting) && 'text-muted-foreground cursor-wait',
+                        )}
+                        style={{
+                          WebkitUserSelect: 'text',
+                          WebkitTouchCallout: 'none',
+                          minHeight: undefined,
+                          resize: 'none',
+                        }}
+                        rows={1}
+                        autoFocus={!isEnhancing && !isTypewriting}
+                        onCompositionStart={() => (isCompositionActive.current = true)}
+                        onCompositionEnd={() => (isCompositionActive.current = false)}
+                        onKeyDown={isEnhancing || isTypewriting ? undefined : handleKeyDown}
+                        onPaste={isEnhancing || isTypewriting ? undefined : handlePaste}
+                      />
+                      {/* TA mode: rotating placeholder aligned with query text */}
+                      {isTechnicalMode && !input && !isEnhancing && !isTypewriting && !hasInteracted && (
+                        <div className="pointer-events-none absolute inset-x-0 top-1 z-10">
+                          <TextRotate
+                            texts={['Ask anything...', 'Analyze AAPL, BTC, NVDA & more...']}
+                            rotationInterval={3000}
+                            splitBy="words"
+                            staggerDuration={0.04}
+                            staggerFrom="first"
+                            transition={{ type: 'spring', damping: 30, stiffness: 400 }}
+                            mainClassName="text-[16px] leading-normal text-muted-foreground/90 font-sans"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
               )}
 
-              {/* Rotating placeholder overlay */}
-              {!isRecording && !input && !isEnhancing && !isTypewriting && !hasInteracted && (
+              {/* Rotating placeholder overlay — non-TA modes only (homepage empty state) */}
+              {!isTechnicalMode && !isRecording && !input && !isEnhancing && !isTypewriting && !hasInteracted && (
                 <div className="absolute top-0 left-0 right-0 pointer-events-none z-10 px-4 py-[14px]">
                   <TextRotate
                     texts={['Ask anything...', 'Search crypto, stocks, web & more...']}

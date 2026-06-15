@@ -30,6 +30,7 @@ import type {
   AddMemoryTool,
   codeContextTool,
   predictionSearchTool,
+  technicalAnalysisTool,
 } from '@/lib/tools';
 
 import type { InferUITool, UIMessage } from 'ai';
@@ -180,6 +181,7 @@ type createMemoryTools = InferUITool<SearchMemoryTool>;
 type addMemoryTools = InferUITool<AddMemoryTool>;
 type codeContextTool = InferUITool<typeof codeContextTool>;
 type predictionSearchTool = InferUITool<ReturnType<typeof predictionSearchTool>>;
+type technicalAnalysisTool = InferUITool<ReturnType<typeof technicalAnalysisTool>>;
 
 // type mcpSearchTool = InferUITool<typeof mcpSearchTool>;
 
@@ -223,6 +225,7 @@ export type ChatTools = {
 
   code_context: codeContextTool;
   prediction_search: predictionSearchTool;
+  technical_analysis: technicalAnalysisTool;
 
   xai_web_search: webSearch;
   xai_x_search: xSearchTool;

@@ -81,6 +81,8 @@ const ChatInterface = memo(
       }
     }, [selectedGroup, setSelectedGroup]);
     const [selectedConnectors, setSelectedConnectors] = useState<ConnectorProvider[]>([]);
+    const [technicalIndicators, setTechnicalIndicators] = useLocalStorage<string[]>('bharatx-technical-indicators', []);
+    const [technicalTimeframe, setTechnicalTimeframe] = useLocalStorage<string>('bharatx-technical-timeframe', '1d');
     const [isCustomInstructionsEnabled, setIsCustomInstructionsEnabled] = useLocalStorage(
       'bharatx-custom-instructions-enabled',
       true,
@@ -266,6 +268,8 @@ const ChatInterface = memo(
     const isCustomInstructionsEnabledRef = useRef(isCustomInstructionsEnabled);
     const searchProviderRef = useRef(searchProvider);
     const selectedConnectorsRef = useRef(selectedConnectors);
+    const technicalIndicatorsRef = useRef(technicalIndicators);
+    const technicalTimeframeRef = useRef(technicalTimeframe);
 
     // Update refs whenever state changes - this ensures we always have current values
     selectedModelRef.current = selectedModel;
@@ -273,6 +277,8 @@ const ChatInterface = memo(
     isCustomInstructionsEnabledRef.current = isCustomInstructionsEnabled;
     searchProviderRef.current = searchProvider;
     selectedConnectorsRef.current = selectedConnectors;
+    technicalIndicatorsRef.current = technicalIndicators;
+    technicalTimeframeRef.current = technicalTimeframe;
 
     const { messages, sendMessage, setMessages, regenerate, stop, status, error, resumeStream } = useChat<ChatMessage>({
       id: chatId,
@@ -290,6 +296,10 @@ const ChatInterface = memo(
               isCustomInstructionsEnabled: isCustomInstructionsEnabledRef.current,
               searchProvider: searchProviderRef.current,
               selectedConnectors: selectedConnectorsRef.current,
+              technicalAnalysis: {
+                indicators: technicalIndicatorsRef.current,
+                timeframe: technicalTimeframeRef.current,
+              },
               ...(initialChatId ? { chat_id: initialChatId } : {}),
               ...body,
             },
@@ -812,6 +822,10 @@ const ChatInterface = memo(
                   onOpenSettings={handleOpenSettings}
                   selectedConnectors={selectedConnectors}
                   setSelectedConnectors={setSelectedConnectors}
+                  technicalIndicators={technicalIndicators}
+                  setTechnicalIndicators={setTechnicalIndicators}
+                  technicalTimeframe={technicalTimeframe}
+                  setTechnicalTimeframe={setTechnicalTimeframe}
                 />
 
                 {/* Example categories - shown on empty state below the form */}

@@ -177,6 +177,7 @@ const MapComponent = dynamic(() => import('@/components/map-components').then(m 
 const NearbySearchMapView = dynamic(() => import('@/components/nearby-search-map-view'), { ssr: false });
 const InteractiveStockChart = dynamic(() => import('@/components/interactive-stock-chart'), { ssr: false });
 const CryptoChart = dynamic(() => import('@/components/crypto-charts').then(m => ({ default: m.CryptoChart })), { ssr: false });
+const TechnicalAnalysis = dynamic(() => import('@/components/technical-analysis').then(m => ({ default: m.TechnicalAnalysis })), { ssr: false });
 const CryptoTickers = dynamic(() => import('@/components/crypto-charts').then(m => ({ default: m.CryptoTickers })), { ssr: false });
 
 // Simple loader component for stock chart - no useEffect needed
@@ -2045,6 +2046,36 @@ export const MessagePartRenderer = memo<MessagePartRendererProps>(
               case 'output-available':
                 return (
                   <CryptoChart result={part.output} coinId={part.input.coinId} chartType="candlestick" key={`${messageIndex}-${partIndex}-tool`} />
+                );
+            }
+            break;
+
+          case 'tool-technical_analysis':
+            switch (part.state) {
+              case 'input-streaming':
+                return (
+                  <div key={`${messageIndex}-${partIndex}-tool`} className="text-sm text-neutral-500">
+                    Preparing technical analysis...
+                  </div>
+                );
+              case 'input-available':
+                return (
+                  <SearchLoadingState
+                    key={`${messageIndex}-${partIndex}-tool`}
+                    icon={TrendingUpIcon}
+                    text="Fetching market data and computing indicators..."
+                    color="violet"
+                  />
+                );
+              case 'output-available':
+                return <TechnicalAnalysis result={part.output} key={`${messageIndex}-${partIndex}-tool`} />;
+              case 'output-error':
+                return (
+                  <ToolErrorDisplay
+                    key={`${messageIndex}-${partIndex}-tool`}
+                    errorText={part.errorText || 'Technical analysis failed'}
+                    toolName="Technical Analysis"
+                  />
                 );
             }
             break;
