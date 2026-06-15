@@ -16,10 +16,55 @@ import {
   generateObject,
   stepCountIs,
   JsonToSseTransformStream,
+  tool,
+  type ModelMessage,
 } from 'ai';
+import { z } from 'zod';
+
+const AGENT_THOR_TOOLS = [
+  'web_search',
+  'datetime',
+  'stock_chart',
+  'coin_data',
+  'coin_ohlc',
+  'coin_data_by_contract',
+  'currency_converter',
+] as const;
+
+function getLastUserMessageText(messages: ModelMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role !== 'user') continue;
+    if (typeof msg.content === 'string') return msg.content;
+    if (Array.isArray(msg.content)) {
+      return msg.content
+        .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+        .map((part) => part.text)
+        .join(' ');
+    }
+  }
+  return '';
+}
+
+function detectResearchIntent(text: string) {
+  const looksCrypto =
+    /\b(crypto|cryptocurrency|bitcoin|btc|ethereum|eth|solana|sol|defi|altcoin|blockchain|token|web3)\b/i.test(
+      text,
+    );
+  const looksStock =
+    /\b(stock|stocks|shares|equity|equities|ticker|nasdaq|nyse|s&p|dow jones|earnings|dividend|aapl|msft|googl|amzn|tsla|nvda)\b/i.test(
+      text,
+    );
+  // Crypto wins when both match — avoids forcing a stock_chart lookup for coins.
+  return {
+    looksCrypto,
+    looksStock: looksStock && !looksCrypto,
+  };
+}
 import { createMemoryTools } from '@/lib/tools/supermemory';
 import {
   bharatX,
+  moonshotAgentThorModel,
   shouldBypassRateLimits,
   getModelParameters,
   hasReasoningSupport,
@@ -257,17 +302,28 @@ export async function POST(req: Request) {
       }
 
       const shouldUseXaiMultiAgent = group === 'multi-agent' && !isSearchGroupComingSoon('multi-agent');
+      const shouldUseAgentThor = group === 'agent-thor' && !isSearchGroupComingSoon('agent-thor');
+
+      // Agent Thor always runs on Kimi K2.6 regardless of the user's picked model
+      const effectiveModelId = shouldUseAgentThor ? 'bharatx-kimi-k2-6-think' : model;
 
       const setupTime = (Date.now() - requestStartTime) / 1000;
-      console.log(`🚀 Time to streamText: ${setupTime.toFixed(2)}s`, shouldUseXaiMultiAgent ? '(multi-agent mode)' : '');
+      console.log(
+        `🚀 Time to streamText: ${setupTime.toFixed(2)}s`,
+        shouldUseXaiMultiAgent ? '(multi-agent mode)' : shouldUseAgentThor ? '(agent-thor mode)' : '',
+      );
 
       const streamStartTime = Date.now();
 
       const result = streamText({
-        model: shouldUseXaiMultiAgent ? xai.responses('grok-4.20-multi-agent') : bharatX.languageModel(model),
+        model: shouldUseXaiMultiAgent
+          ? xai.responses('grok-4.20-multi-agent')
+          : shouldUseAgentThor
+            ? moonshotAgentThorModel
+            : bharatX.languageModel(effectiveModelId),
         messages: await convertToModelMessages(messages),
-        ...getModelParameters(shouldUseXaiMultiAgent ? 'grok-4.20-multi-agent' : model),
-        stopWhen: stepCountIs(shouldUseXaiMultiAgent ? 5 : 5),
+        ...getModelParameters(shouldUseXaiMultiAgent ? 'grok-4.20-multi-agent' : effectiveModelId),
+        stopWhen: stepCountIs(shouldUseAgentThor ? 6 : 5),
         onAbort: ({ steps }) => {
           console.log('Stream aborted after', steps.length, 'steps');
         },
@@ -282,7 +338,9 @@ export async function POST(req: Request) {
           (latitude && longitude ? `\n\nThe user's location is ${latitude}, ${longitude}.` : '') +
           (shouldUseXaiMultiAgent
             ? '\n\nWhen multi-agent mode is enabled, you are operating in a high-agency research workflow. Use only the xAI server-side web search and X search tools available in this environment. Do not call any other research or search tools.\n\nYour job is to behave like a rigorous research analyst:\n- Break the request into sub-questions when useful.\n- Search broadly first, then narrow based on what you find.\n- Use multiple searches when the topic is ambiguous, fast-moving, comparative, or requires validation.\n- Cross-check important claims across multiple sources whenever possible.\n- Prefer recent and primary sources for news, releases, product changes, pricing, benchmarks, and policy updates.\n- Use X search when social signals, firsthand announcements, or fast-moving discourse are relevant.\n- Use web search when you need official documentation, articles, product pages, blogs, papers, or other published sources.\n- If both web and X are relevant, use both.\n\nOutput requirements:\n- Synthesize findings into a clear, direct answer instead of narrating every search step.\n- Be concise but complete.\n- Include uncertainty when evidence is mixed, incomplete, or time-sensitive.\n- Do not fabricate facts, sources, timelines, quotes, or consensus.\n- If you cannot verify a claim well enough, say so plainly.\n- Ground the final answer in the sources you found and make sure the answer actually reflects them.\n\nResponse structure guidelines:\n- Start with a direct answer or conclusion in 1-3 sentences.\n- Then present the most important findings as short sections or bullet points.\n- For comparative questions, explicitly compare the options point-by-point.\n- For fast-moving topics, clearly separate confirmed facts from tentative signals.\n- End with a brief takeaway, recommendation, or next step when useful.\n- Keep the response skimmable and avoid long, repetitive paragraphs.\n\nTool behavior requirements:\n- Do not mention internal tool limitations unless necessary.\n- Do not ask for permission to search.\n- Do not stop after a single weak search if the question clearly needs deeper verification.\n- Avoid redundant searches that do not add evidence.\n- Prefer quality of evidence over quantity of searches.'
-            : ''),
+            : shouldUseAgentThor
+              ? '\n\nWhen Agent Thor synthesis begins (no more tool calls), you MUST write the complete final analysis immediately. Never stop after a planning sentence like "Now let me..." or "Let me search...".\n\nCRITICAL output rules:\n- User-visible text must ONLY be the final report with markdown headings (## Executive Summary, etc.).\n- Do NOT expose internal planning, tool budgets, JSON formats, or step-by-step tool narration.\n- Do NOT mention web_search, stock_chart, coin_data, or tool limits in the visible response.\n- Your response must include: executive summary, historical context, current metrics, risks, and a clear invest/hold/avoid verdict.\n\nMandatory inline citations:\n- Every factual claim from tools or web search MUST include an inline markdown link immediately after it: [Source Title](https://full-url).\n- coin_data / coin_ohlc metrics → link to the CoinGecko URL from the tool result.\n- stock_chart metrics → link to Yahoo Finance or the primary URL from the tool result.\n- News, L2 activity, ETF flows, regulation, competition → link to the exact URL from kimi_web_search results.\n- Never state news or fundamentals without a source link. If unsourced, omit or label as unverified.'
+              : ''),
         toolChoice: 'auto',
         providerOptions: {
           gateway: {
@@ -323,7 +381,7 @@ export async function POST(req: Request) {
             parallelToolCalls: false,
           },
           groq: {
-            ...(model === 'bharatx-gpt-oss-20' || model === 'bharatx-gpt-oss-120'
+            ...(model === 'bharatx-gpt-oss-20' || model === 'bharatx-gpt-oss-safeguard-20'
               ? {
                 reasoningEffort: 'high',
                 reasoningFormat: 'hidden',
@@ -345,9 +403,14 @@ export async function POST(req: Request) {
                 parallel_tool_calls: true,
                 parallelToolCalls: true,
               }
-            : {
-                parallel_tool_calls: false,
-              },
+            : model === 'bharatx-grok-4-fast-think'
+              ? {
+                  reasoningEffort: 'high',
+                  parallel_tool_calls: false,
+                }
+              : {
+                  parallel_tool_calls: false,
+                },
           cohere: {
             ...(model === 'bharatx-cmd-a-think'
               ? {
@@ -391,6 +454,7 @@ export async function POST(req: Request) {
               }
               : {}),
           },
+          'moonshot-thor': {},
         },
         prepareStep: async ({ steps, messages }) => {
           // Multi-agent mode: keep tools available across all steps
@@ -401,6 +465,86 @@ export async function POST(req: Request) {
             };
           }
 
+          // Agent Thor: enforce tool order (charts → search → synthesis)
+          if (shouldUseAgentThor) {
+            const usedTools = new Set<string>();
+            let searchCalls = 0;
+
+            for (const step of steps) {
+              for (const tc of step.toolCalls) {
+                usedTools.add(tc.toolName);
+                if (tc.toolName === 'web_search') searchCalls++;
+              }
+            }
+
+            const userText = getLastUserMessageText(messages);
+            const { looksCrypto, looksStock } = detectResearchIntent(userText);
+
+            const hasCoinData =
+              usedTools.has('coin_data') || usedTools.has('coin_data_by_contract');
+            const hasOhlc = usedTools.has('coin_ohlc');
+            const hasStock = usedTools.has('stock_chart');
+            const isCryptoPath = looksCrypto || hasCoinData || hasOhlc;
+            const isStockPath = looksStock || hasStock;
+            const cryptoChartsReady = hasCoinData && hasOhlc;
+
+            const cryptoDone = !isCryptoPath || cryptoChartsReady;
+            const stockDone = !isStockPath || hasStock;
+            const chartsDone = cryptoDone && stockDone;
+
+            const allReady = chartsDone && searchCalls >= 1;
+
+            const shouldSynthesize = steps.length >= 5 || allReady;
+
+            if (shouldSynthesize) {
+              return { toolChoice: 'none' as const, activeTools: [] };
+            }
+
+            // Thinking is disabled for Agent Thor, so every tool here (charts and
+            // web_search alike) is a normal function tool that can be force-selected.
+
+            // Complete required chart tools first (forced, in order)
+            if (isCryptoPath && !hasCoinData) {
+              return {
+                toolChoice: { type: 'tool' as const, toolName: 'coin_data' },
+                activeTools: ['coin_data', 'coin_ohlc'],
+              };
+            }
+            if (isCryptoPath && !hasOhlc) {
+              return {
+                toolChoice: { type: 'tool' as const, toolName: 'coin_ohlc' },
+                activeTools: ['coin_ohlc'],
+              };
+            }
+            if (isStockPath && !hasStock) {
+              return {
+                toolChoice: { type: 'tool' as const, toolName: 'stock_chart' },
+                activeTools: ['stock_chart'],
+              };
+            }
+
+            // Charts done (or none needed) — force at least one web search next.
+            if (searchCalls < 1) {
+              return {
+                toolChoice: { type: 'tool' as const, toolName: 'web_search' },
+                activeTools: ['web_search'],
+              };
+            }
+
+            // Optional second search before synthesis
+            if (searchCalls < 2) {
+              return {
+                toolChoice: 'auto' as const,
+                activeTools: ['web_search'],
+              };
+            }
+
+            return {
+              toolChoice: 'auto' as const,
+              activeTools: [...AGENT_THOR_TOOLS],
+            };
+          }
+
           // Calculate total token usage across all steps
           const totalTokens = steps.reduce((sum, step) => sum + (step.usage?.totalTokens ?? 0), 0);
 
@@ -408,7 +552,7 @@ export async function POST(req: Request) {
           const shouldPrune = messages.length > 10 || totalTokens > 100000;
           
           // Always check if model supports reasoning
-          const modelHasReasoning = hasReasoningSupport(model);
+          const modelHasReasoning = hasReasoningSupport(effectiveModelId);
 
           let prunedMessages = messages;
           
@@ -483,7 +627,17 @@ export async function POST(req: Request) {
                 xai_web_search: xai.tools.webSearch(),
                 xai_x_search: xai.tools.xSearch(),
               }
-            : baseTools;
+            : shouldUseAgentThor
+              ? {
+                  stock_chart: stockChartTool,
+                  currency_converter: currencyConverterTool,
+                  coin_data: coinDataTool,
+                  coin_data_by_contract: coinDataByContractTool,
+                  coin_ohlc: coinOhlcTool,
+                  datetime: datetimeTool,
+                  web_search: webSearchTool(dataStream, searchProvider),
+                }
+              : baseTools;
 
           if (!user) {
             return toolsWithXai;
@@ -583,16 +737,18 @@ export async function POST(req: Request) {
 
       dataStream.merge(
         result.toUIMessageStream({
-          sendReasoning: true,
+          // Agent Thor: keep Kimi thinking server-side but don't stream the reasoning wall to UI
+          sendReasoning: !shouldUseAgentThor,
           sendSources: shouldUseXaiMultiAgent,
           messageMetadata: ({ part }) => {
             if (part.type === 'finish') {
               console.log('Finish part: ', part);
               const processingTime = (Date.now() - streamStartTime) / 1000;
               return {
-                model: model as string,
+                model: effectiveModelId as string,
                 createdAt: new Date().toISOString(),
                 multiAgentMode: shouldUseXaiMultiAgent,
+                agentThorMode: shouldUseAgentThor,
                 completionTime: processingTime,
                 totalTokens: part.totalUsage?.totalTokens ?? null,
                 inputTokens: part.totalUsage?.inputTokens ?? null,
@@ -601,9 +757,10 @@ export async function POST(req: Request) {
             }
 
             return {
-              model: model as string,
+              model: effectiveModelId as string,
               createdAt: new Date().toISOString(),
               multiAgentMode: shouldUseXaiMultiAgent,
+              agentThorMode: shouldUseAgentThor,
               completionTime: null,
               inputTokens: null,
               outputTokens: null,
@@ -634,7 +791,7 @@ export async function POST(req: Request) {
             createdAt: new Date(),
             attachments: [],
             chatId: id,
-            model: model,
+            model: message.metadata?.model ?? model,
             completionTime: message.metadata?.completionTime ?? 0,
             inputTokens: message.metadata?.inputTokens ?? 0,
             outputTokens: message.metadata?.outputTokens ?? 0,

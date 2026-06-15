@@ -1,7 +1,7 @@
 // /app/api/lookout/route.ts
 import { generateTitleFromUserMessage } from '@/app/actions';
 import { convertToModelMessages, streamText, createUIMessageStream, stepCountIs, JsonToSseTransformStream } from 'ai';
-import { bharatX } from '@/ai/providers';
+import { bharatX, DEFAULT_MODEL_ID } from '@/ai/providers';
 import {
   createStreamId,
   saveChat,
@@ -12,7 +12,8 @@ import {
   updateLookoutLastRun,
   updateLookout,
   updateLookoutStatus,
-  getUserById,
+  resolveLookoutUser,
+  GUEST_LOOKOUT_USER_ID,
 } from '@/lib/db/queries';
 import { createResumableStreamContext, type ResumableStreamContext } from 'resumable-stream';
 import { after } from 'next/server';
@@ -349,10 +350,6 @@ You are a professional crypto and financial intelligence analyst. Produce instit
   return basePrompt + (modeInstructions[searchMode] || modeInstructions.extreme);
 }
 
-async function checkUserIsProById(userId: string): Promise<boolean> {
-  return true;
-}
-
 let globalStreamContext: ResumableStreamContext | null = null;
 
 function getStreamContext() {
@@ -410,16 +407,10 @@ export async function POST(req: Request) {
       return new Response('Lookout not found', { status: 404 });
     }
 
-    const userResult = await getUserById(userId);
+    const userResult = await resolveLookoutUser(userId);
     if (!userResult) {
       console.error('User not found:', userId);
       return new Response('User not found', { status: 404 });
-    }
-
-    const isUserPro = await checkUserIsProById(userId);
-    if (!isUserPro) {
-      console.error('User is not pro, cannot run lookout:', userId);
-      return new Response('Lookouts require a Pro subscription', { status: 403 });
     }
 
     const chatId = uuidv7();
@@ -450,7 +441,7 @@ export async function POST(req: Request) {
             parts: userMessage.parts,
             attachments: [],
             createdAt: new Date(),
-            model: 'bharatx-grok-4-fast-think',
+            model: DEFAULT_MODEL_ID,
             completionTime: null,
             inputTokens: null,
             outputTokens: null,
@@ -482,7 +473,7 @@ export async function POST(req: Request) {
         const maxSteps = searchMode === 'finagent' ? 8 : 2;
 
         const result = streamText({
-          model: bharatX.languageModel('bharatx-grok-4-fast-think'),
+          model: bharatX.languageModel(DEFAULT_MODEL_ID),
           messages: await convertToModelMessages([userMessage]),
           stopWhen: stepCountIs(maxSteps),
           maxRetries: 10,
@@ -572,7 +563,7 @@ export async function POST(req: Request) {
                   });
                 }
 
-                if (userResult.email) {
+                if (userResult.email && userResult.id !== GUEST_LOOKOUT_USER_ID) {
                   try {
                     let assistantResponseText = event.text || '';
 
@@ -672,7 +663,7 @@ export async function POST(req: Request) {
                 console.log('Finish part: ', part);
                 const processingTime = (Date.now() - streamStartTime) / 1000;
                 return {
-                  model: 'bharatx-grok-4-fast-think',
+                  model: DEFAULT_MODEL_ID,
                   completionTime: processingTime,
                   createdAt: new Date().toISOString(),
                   totalTokens: part.totalUsage?.totalTokens ?? null,
@@ -689,29 +680,22 @@ export async function POST(req: Request) {
         return 'Oops, an error occurred in scheduled search!';
       },
       onFinish: async ({ messages }) => {
-        if (userId) {
-          const user = await getUserById(userId);
-          const isUserPro = user ? await checkUserIsProById(userId) : false;
-
-          if (user && isUserPro) {
-            await saveMessages({
-              messages: messages.map((message) => ({
-                id: message.id,
-                role: message.role,
-                parts: message.parts,
-                createdAt: new Date(),
-                attachments: [],
-                chatId: chatId,
-                model: 'bharatx-grok-4-fast-think',
-                completionTime: message.metadata?.completionTime ?? 0,
-                inputTokens: message.metadata?.inputTokens ?? 0,
-                outputTokens: message.metadata?.outputTokens ?? 0,
-                totalTokens: message.metadata?.totalTokens ?? 0,
-              })),
-            });
-          } else {
-            console.error('User validation failed in onFinish - user not found or not pro:', userId);
-          }
+        if (userId && messages.length > 0) {
+          await saveMessages({
+            messages: messages.map((message) => ({
+              id: message.id,
+              role: message.role,
+              parts: message.parts,
+              createdAt: new Date(),
+              attachments: [],
+              chatId: chatId,
+              model: DEFAULT_MODEL_ID,
+              completionTime: message.metadata?.completionTime ?? 0,
+              inputTokens: message.metadata?.inputTokens ?? 0,
+              outputTokens: message.metadata?.outputTokens ?? 0,
+              totalTokens: message.metadata?.totalTokens ?? 0,
+            })),
+          });
         }
       },
     });

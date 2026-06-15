@@ -1,8 +1,8 @@
 // /components/reddit-search.tsx
 /* eslint-disable @next/next/no-img-element */
 import React, { useState } from 'react';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { Drawer, DrawerContent } from '@/components/ui/drawer';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
@@ -180,26 +180,27 @@ const RedditSourcesSheet: React.FC<{
 }> = ({ searches, open, onOpenChange }) => {
   const isMobile = useIsMobile();
   const totalResults = searches.reduce((sum, search) => sum + search.results.length, 0);
-
   const SheetWrapper = isMobile ? Drawer : Sheet;
   const SheetContentWrapper = isMobile ? DrawerContent : SheetContent;
+  const HeaderWrapper = isMobile ? DrawerHeader : SheetHeader;
+  const TitleWrapper = isMobile ? DrawerTitle : SheetTitle;
+  const DescriptionWrapper = isMobile ? DrawerDescription : SheetDescription;
 
   return (
     <SheetWrapper open={open} onOpenChange={onOpenChange}>
       <SheetContentWrapper className={cn(isMobile ? 'h-[85vh]' : 'w-[580px] sm:max-w-[580px]', 'p-0')}>
         <div className="flex flex-col h-full bg-background">
-          {/* Header */}
-          <div className="px-5 py-4 border-b border-border">
+          <HeaderWrapper className="px-5 py-4 border-b border-border text-left">
             <div className="flex items-center gap-2 mb-0.5">
               <div className="p-1.5 rounded-md bg-orange-50 dark:bg-orange-900/20">
                 <RedditLogoIcon className="h-3.5 w-3.5 text-orange-500" />
               </div>
-              <h2 className="text-base font-semibold text-foreground">Reddit Results</h2>
+              <TitleWrapper className="text-base font-semibold text-foreground">Reddit Results</TitleWrapper>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <DescriptionWrapper className="text-xs text-muted-foreground">
               {totalResults} from {searches.length} {searches.length === 1 ? 'query' : 'queries'}
-            </p>
-          </div>
+            </DescriptionWrapper>
+          </HeaderWrapper>
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto">
@@ -334,11 +335,12 @@ const RedditSearch: React.FC<{
     <div className="w-full my-3">
       <div className="border border-border rounded-lg overflow-hidden bg-card">
         {/* Header */}
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-accent/50 transition-colors"
-        >
-          <div className="flex items-center gap-2.5">
+        <div className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-accent/50 transition-colors group">
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
+          >
             <div className="p-1.5 rounded-md bg-orange-50 dark:bg-orange-900/20">
               <RedditLogoIcon className="h-3.5 w-3.5 text-orange-500" />
             </div>
@@ -346,28 +348,33 @@ const RedditSearch: React.FC<{
             <span className="text-[11px] text-muted-foreground">
               {totalResults} {totalResults === 1 ? 'post' : 'posts'}
             </span>
-          </div>
-          <div className="flex items-center gap-2">
+          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
             {totalResults > 0 && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSourcesSheetOpen(true);
-                }}
+                type="button"
+                onClick={() => setSourcesSheetOpen(true)}
                 className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors px-2 py-1 hover:bg-accent rounded-md flex items-center gap-1"
               >
                 View all
                 <Icons.ArrowUpRight className="w-3 h-3" />
               </button>
             )}
-            <Icons.ChevronDown
-              className={cn(
-                'h-3.5 w-3.5 text-muted-foreground transition-transform duration-200',
-                isExpanded && 'rotate-180'
-              )}
-            />
+            <button
+              type="button"
+              onClick={() => setIsExpanded(!isExpanded)}
+              aria-label={isExpanded ? 'Collapse Reddit results' : 'Expand Reddit results'}
+              className="p-0.5 rounded hover:bg-accent/40 transition-colors"
+            >
+              <Icons.ChevronDown
+                className={cn(
+                  'h-3.5 w-3.5 text-muted-foreground transition-transform duration-200',
+                  isExpanded && 'rotate-180',
+                )}
+              />
+            </button>
           </div>
-        </button>
+        </div>
 
         {/* Content */}
         {isExpanded && (

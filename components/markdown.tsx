@@ -5,7 +5,7 @@ import { highlight } from 'sugar-high';
 import Image from 'next/image';
 import Link from 'next/link';
 import Latex from 'react-latex-next';
-import Marked, { ReactRenderer } from 'marked-react';
+import Marked, { ReactRenderer as MarkedReactRenderer } from 'marked-react';
 import React, { useCallback, useMemo, useState, Fragment, useRef, lazy, Suspense, useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,8 @@ import { toast } from 'sonner';
 interface MarkdownRendererProps {
   content: string;
   isUserMessage?: boolean;
+  /** Skip LaTeX parsing while tokens stream in — prevents broken layout from partial $...$ */
+  isStreaming?: boolean;
 }
 
 interface CitationLink {
@@ -269,8 +271,52 @@ const CodeBlock: React.FC<CodeBlockProps> = React.memo(
 
 CodeBlock.displayName = 'CodeBlock';
 
+/** Match currency in prose and tables, including ~$0.00025, **$1,500**, $0.01– ranges. */
+const CURRENCY_AMOUNT_REGEX =
+  /\*{0,2}[~≈]?\$\d+(?:,\d{3})*(?:\.\d+)?(?:[kKmMbBtT])?(?:\s*[–\-—]\s*(?:\$\d+(?:,\d{3})*(?:\.\d+)?(?:[kKmMbBtT])?)?)?\*{0,2}/g;
+
+function protectCurrencyAmounts(
+  source: string,
+  monetaryBlocks: Array<{ id: string; content: string }>,
+): string {
+  return source.replace(CURRENCY_AMOUNT_REGEX, (match) => {
+    const id = `MONETARY${monetaryBlocks.length}END`;
+    monetaryBlocks.push({ id, content: match });
+    return id;
+  });
+}
+
+function restoreMonetaryPlaceholders(
+  source: string,
+  monetaryBlocks: Array<{ id: string; content: string }>,
+): string {
+  return source.replace(/MONETARY(\d+)END/g, (_, index) => {
+    const block = monetaryBlocks[Number(index)];
+    return block?.content ?? '';
+  });
+}
+
+/** Render text without passing bare $ amounts through LaTeX delimiters. */
+function renderSafeText(text: string, keyPrefix: string): React.ReactNode {
+  if (!text.includes('$')) return text;
+
+  const parts = text.split(
+    /(\*{0,2}[~≈]?\$\d+(?:,\d{3})*(?:\.\d+)?(?:[kKmMbBtT])?(?:\s*[–\-—]\s*(?:\$\d+(?:,\d{3})*(?:\.\d+)?(?:[kKmMbBtT])?)?)?\*{0,2})/g,
+  );
+
+  if (parts.length === 1) return text;
+
+  return parts.map((part, index) =>
+    part.startsWith('$') || part.startsWith('~$') || part.startsWith('**$') ? (
+      <span key={`${keyPrefix}-currency-${index}`}>{part}</span>
+    ) : (
+      part
+    ),
+  );
+}
+
 // Optimized synchronous content processor using useMemo
-const useProcessedContent = (content: string) => {
+const useProcessedContent = (content: string, isStreaming = false) => {
   return useMemo(() => {
     const citations: CitationLink[] = [];
     const latexBlocks: Array<{ id: string; content: string; isBlock: boolean }> = [];
@@ -334,6 +380,11 @@ const useProcessedContent = (content: string) => {
       newContent += modifiedContent.slice(lastIndex);
       modifiedContent = newContent;
 
+      const monetaryBlocks: Array<{ id: string; content: string }> = [];
+
+      // Protect ALL currency before table/LaTeX processing (covers ~$0.00025, $0.01–, **$1,500**)
+      modifiedContent = protectCurrencyAmounts(modifiedContent, monetaryBlocks);
+
       // Protect table rows to preserve pipe delimiters
       const tableBlocks: Array<{ id: string; content: string }> = [];
       const tableRowPattern = /^\|.+\|$/gm;
@@ -356,121 +407,40 @@ const useProcessedContent = (content: string) => {
         modifiedContent = newContent;
       }
 
-      // Extract monetary amounts FIRST to protect them from LaTeX patterns
-      const monetaryBlocks: Array<{ id: string; content: string }> = [];
-      // Match monetary amounts with optional scale words and currency codes
-      // Exclude mathematical expressions by using negative lookahead for backslashes or ending $
-      const monetaryRegex =
-        /(^|[\s([>~≈<)])\$\d+(?:,\d{3})*(?:\.\d+)?(?:[kKmMbBtT]|\s+(?:thousand|million|billion|trillion|k|K|M|B|T))?(?:\s+(?:USD|EUR|GBP|CAD|AUD|JPY|CNY|CHF))?(?:\s*(?:per\s+(?:million|thousand|token|month|year)|\/(?:month|year|token)))?(?=\s|$|[).,;!?<\]])(?![^$]*\\[^$]*\$)/g;
+      // Only explicit LaTeX delimiters — never infer math from bare $ (breaks finance prose
+      // and streaming partials like "$0.01–" which open KaTeX and corrupt the UI).
+      if (!isStreaming) {
+        const explicitLatexPatterns = [
+          {
+            patterns: [/\\\[([\s\S]*?)\\\]/g, /\$\$([\s\S]*?)\$\$/g],
+            isBlock: true,
+            prefix: '§§§LATEXBLOCK_PROTECTED_',
+          },
+          {
+            patterns: [/\\\(([\s\S]*?)\\\)/g],
+            isBlock: false,
+            prefix: '§§§LATEXINLINE_PROTECTED_',
+          },
+        ];
 
-      let monetaryProcessed = '';
-      let lastMonetaryIndex = 0;
-      const monetaryMatches = [...modifiedContent.matchAll(monetaryRegex)];
+        for (const { patterns, isBlock, prefix } of explicitLatexPatterns) {
+          for (const pattern of patterns) {
+            const matches = [...modifiedContent.matchAll(pattern)];
+            let lastIndex = 0;
+            let newContent = '';
 
-      for (let i = 0; i < monetaryMatches.length; i++) {
-        const match = monetaryMatches[i];
-        const prefix = match[1];
-        const id = `MONETARY${monetaryBlocks.length}END`;
-        monetaryBlocks.push({ id, content: match[0].slice(prefix.length) });
+            for (let i = 0; i < matches.length; i++) {
+              const match = matches[i];
+              const id = `${prefix}${latexBlocks.length}§§§`;
+              latexBlocks.push({ id, content: match[0], isBlock });
 
-        monetaryProcessed += modifiedContent.slice(lastMonetaryIndex, match.index) + prefix + id;
-        lastMonetaryIndex = match.index! + match[0].length;
-      }
-
-      monetaryProcessed += modifiedContent.slice(lastMonetaryIndex);
-      modifiedContent = monetaryProcessed;
-
-      // Also protect monetary amounts inside protected table rows
-      if (typeof tableBlocks !== 'undefined' && tableBlocks.length > 0) {
-        for (let t = 0; t < tableBlocks.length; t++) {
-          let rowContent = tableBlocks[t].content;
-          const rowMonetaryMatches = [...rowContent.matchAll(monetaryRegex)];
-          if (rowMonetaryMatches.length === 0) continue;
-          let lastIndex = 0;
-          let newRow = '';
-          for (let i = 0; i < rowMonetaryMatches.length; i++) {
-            const match = rowMonetaryMatches[i];
-            const prefix = match[1];
-            const id = `MONETARY${monetaryBlocks.length}END`;
-            monetaryBlocks.push({ id, content: match[0].slice(prefix.length) });
-            newRow += rowContent.slice(lastIndex, match.index) + prefix + id;
-            lastIndex = match.index! + match[0].length;
-          }
-          newRow += rowContent.slice(lastIndex);
-          tableBlocks[t].content = newRow;
-        }
-      }
-
-      // Extract LaTeX blocks AFTER monetary amounts are protected
-      const allLatexPatterns = [
-        { patterns: [/\\\[([\s\S]*?)\\\]/g, /\$\$([\s\S]*?)\$\$/g], isBlock: true, prefix: '§§§LATEXBLOCK_PROTECTED_' },
-        {
-          patterns: [
-            /\\\(([\s\S]*?)\\\)/g,
-            // Match $ expressions containing LaTeX commands, superscripts, subscripts, or braces
-            /\$[^\$\n]*[\\^_{}][^\$\n]*\$/g,
-            // Match algebraic expressions with parentheses and variables
-            /\$[^\$\n]*\([^\)]*[a-zA-Z][^\)]*\)[^\$\n]*\$/g,
-            // Match absolute value notation with pipes
-            /\$[^\$\n]*\|[^\|]*\|[^\$\n]*\$/g,
-            // Match $ expressions with single-letter variable followed by operator and number/variable
-            /\$[a-zA-Z]\s*[=<>≤≥≠]\s*[0-9a-zA-Z][^\$\n]*\$/g,
-            // Match $ expressions with number followed by LaTeX-style operators
-            /\$[0-9][^\$\n]*[\\^_≤≥≠∈∉⊂⊃∪∩θΘπΠαβγδεζηλμνξρσςτφχψωΑΒΓΔΕΖΗΛΜΝΞΡΣΤΦΧΨΩ°][^\$\n]*\$/g,
-            // Match pure numeric inline math like $5$ or $3.14$
-            /\$\d+(?:\.\d+)?\$/g,
-            // Match simple mathematical variables (single letter or Greek letters, but not plain numbers)
-            /\$[a-zA-ZθΘπΠαβγδεζηλμνξρσςτφχψωΑΒΓΔΕΖΗΛΜΝΞΡΣΤΦΧΨΩ]+\$/g,
-            // Match simple single-letter variables (like $ m $, $ b $, $ x $, $ y $)
-            /\$\s*[a-zA-Z]\s*\$/g
-          ],
-          isBlock: false,
-          prefix: '§§§LATEXINLINE_PROTECTED_'
-        },
-      ];
-
-      for (const { patterns, isBlock, prefix } of allLatexPatterns) {
-        for (const pattern of patterns) {
-          const matches = [...modifiedContent.matchAll(pattern)];
-          let lastIndex = 0;
-          let newContent = '';
-
-          for (let i = 0; i < matches.length; i++) {
-            const match = matches[i];
-            const id = `${prefix}${latexBlocks.length}§§§`;
-            latexBlocks.push({ id, content: match[0], isBlock });
-
-            newContent += modifiedContent.slice(lastIndex, match.index) + id;
-            lastIndex = match.index! + match[0].length;
-          }
-
-          newContent += modifiedContent.slice(lastIndex);
-          modifiedContent = newContent;
-        }
-      }
-
-      // Additionally, extract LaTeX inside protected table rows so it renders later
-      if (typeof tableBlocks !== 'undefined' && tableBlocks.length > 0) {
-        for (let t = 0; t < tableBlocks.length; t++) {
-          let rowContent = tableBlocks[t].content;
-          for (const { patterns, isBlock, prefix } of allLatexPatterns) {
-            for (const pattern of patterns) {
-              const matches = [...rowContent.matchAll(pattern)];
-              if (matches.length === 0) continue;
-              let lastIndex = 0;
-              let newRow = '';
-              for (let i = 0; i < matches.length; i++) {
-                const match = matches[i];
-                const id = `${prefix}${latexBlocks.length}§§§`;
-                latexBlocks.push({ id, content: match[0], isBlock });
-                newRow += rowContent.slice(lastIndex, match.index) + id;
-                lastIndex = match.index! + match[0].length;
-              }
-              newRow += rowContent.slice(lastIndex);
-              rowContent = newRow;
+              newContent += modifiedContent.slice(lastIndex, match.index) + id;
+              lastIndex = match.index! + match[0].length;
             }
+
+            newContent += modifiedContent.slice(lastIndex);
+            modifiedContent = newContent;
           }
-          tableBlocks[t].content = rowContent;
         }
       }
 
@@ -542,11 +512,7 @@ const useProcessedContent = (content: string) => {
       // Restore table rows LAST so they render with all LaTeX processed
       tableBlocks.forEach(({ id, content }) => {
         // Restore any protected monetary or code placeholders within the row content first
-        let restoredRow = content;
-        monetaryBlocks.forEach(({ id: mid, content: mcontent }) => {
-          const mregex = new RegExp(mid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-          restoredRow = restoredRow.replace(mregex, mcontent);
-        });
+        let restoredRow = restoreMonetaryPlaceholders(content, monetaryBlocks);
         codeBlocks.forEach(({ id: cid, content: ccontent }) => {
           const cregex = new RegExp(cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
           restoredRow = restoredRow.replace(cregex, ccontent);
@@ -558,6 +524,12 @@ const useProcessedContent = (content: string) => {
           citations[i].text = citations[i].text.replace(tregex, restoredRow);
         }
       });
+
+      // Safety net: never leak MONETARY placeholders (can happen during streaming)
+      modifiedContent = restoreMonetaryPlaceholders(modifiedContent, monetaryBlocks);
+      for (let i = 0; i < citations.length; i++) {
+        citations[i].text = restoreMonetaryPlaceholders(citations[i].text, monetaryBlocks);
+      }
 
       return {
         processedContent: modifiedContent,
@@ -574,7 +546,7 @@ const useProcessedContent = (content: string) => {
         isProcessing: false,
       };
     }
-  }, [content]);
+  }, [content, isStreaming]);
 };
 
 const InlineCode: React.FC<{ code: string; elementKey: string }> = React.memo(({ code }) => {
@@ -741,8 +713,23 @@ const LinkPreview = React.memo(({ href, title }: { href: string; title?: string 
 
 LinkPreview.displayName = 'LinkPreview';
 
-const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content, isUserMessage = false }) => {
-  const { processedContent, citations: extractedCitations, latexBlocks, isProcessing } = useProcessedContent(content);
+function withStableKeys(children: React.ReactNode, prefix: string): React.ReactNode {
+  return React.Children.map(React.Children.toArray(children), (child, index) => {
+    if (React.isValidElement(child) && child.key != null) {
+      return child;
+    }
+    if (React.isValidElement(child)) {
+      return React.cloneElement(child, { key: `${prefix}-${index}` });
+    }
+    return <Fragment key={`${prefix}-${index}`}>{child}</Fragment>;
+  });
+}
+
+const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content, isUserMessage = false, isStreaming = false }) => {
+  const { processedContent, citations: extractedCitations, latexBlocks, isProcessing } = useProcessedContent(
+    content,
+    isStreaming,
+  );
   const citationLinks = extractedCitations;
 
   // Optimized element key generation using content hash instead of indices
@@ -827,14 +814,14 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
     [renderHoverCard],
   );
 
-  const renderer: Partial<ReactRenderer> = useMemo(
+  const renderer: Partial<MarkedReactRenderer> = useMemo(
     () => ({
       text(text: string) {
         const blockPattern = /§§§LATEXBLOCK_PROTECTED_(\d+)§§§/g;
         const inlinePattern = /§§§LATEXINLINE_PROTECTED_(\d+)§§§/g;
 
         if (!blockPattern.test(text) && !inlinePattern.test(text)) {
-          return text;
+          return renderSafeText(text, getElementKey('text', text));
         }
 
         blockPattern.lastIndex = 0;
@@ -861,7 +848,9 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
           if (start > lastEnd) {
             const textContent = text.slice(lastEnd, start);
             const key = getElementKey('text', textContent);
-            components.push(<span key={key}>{textContent}</span>);
+            components.push(
+              <span key={key}>{renderSafeText(textContent, key)}</span>,
+            );
           }
 
           const latexBlock = latexBlocks.find((block) => block.id === fullMatch);
@@ -902,7 +891,9 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
         if (lastEnd < text.length) {
           const textContent = text.slice(lastEnd);
           const key = getElementKey('text', textContent);
-          components.push(<span key={key}>{textContent}</span>);
+          components.push(
+            <span key={key}>{renderSafeText(textContent, key)}</span>,
+          );
         }
 
         return components.length === 1 
@@ -910,7 +901,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
           : <Fragment key={getElementKey('text-fragment')}>{components}</Fragment>;
       },
       hr() {
-        return <></>;
+        return <Fragment key={getElementKey('hr')} />;
       },
       paragraph(children) {
         const key = getElementKey('paragraph', String(children));
@@ -942,7 +933,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
             key={key}
             className={`${isUserMessage ? 'leading-relaxed text-foreground !m-0' : ''} my-5 leading-[1.75] text-foreground/95`}
           >
-            {children}
+            {withStableKeys(children, `${key}-p`)}
           </p>
         );
       },
@@ -992,7 +983,11 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
         // If there's descriptive link text, render a normal anchor with hover preview.
         // This preserves full text inside tables and prevents truncation to citation chips.
         if (linkText && linkText !== href) {
-          return renderHoverCard(href, linkText, false);
+          return (
+            <span key={key} className="inline">
+              {renderHoverCard(href, linkText, false)}
+            </span>
+          );
         }
 
         // For bare URLs, render as citation chips
@@ -1019,24 +1014,13 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
 
         return (
           <HeadingTag key={key} className={`${sizeClasses} text-foreground tracking-tight scroll-mt-20`}>
-            {children}
+            {withStableKeys(children, `${key}-h`)}
           </HeadingTag>
         );
       },
       list(children, ordered) {
         const key = getElementKey('list');
         const ListTag = ordered ? 'ol' : 'ul';
-        // Ensure children array has keys - React.Children.map will preserve existing keys
-        const keyedChildren = Array.isArray(children)
-          ? React.Children.map(children, (child, index) => {
-              if (React.isValidElement(child) && child.key != null) {
-                return child;
-              }
-              return React.cloneElement(child as React.ReactElement, {
-                key: child?.key || `${key}-item-${index}`,
-              });
-            })
-          : children;
         return (
           <ListTag
             key={key}
@@ -1045,7 +1029,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
               ordered ? 'pl-8' : 'pl-8 list-disc marker:text-primary/70'
             )}
           >
-            {keyedChildren}
+            {withStableKeys(children, key)}
           </ListTag>
         );
       },
@@ -1053,7 +1037,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
         const key = getElementKey('listItem');
         return (
           <li key={key} className="pl-2 leading-relaxed text-foreground/90">
-            <span className="inline">{children}</span>
+            <span className="inline">{withStableKeys(children, `${key}-li`)}</span>
           </li>
         );
       },
@@ -1064,7 +1048,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
             key={key}
             className="my-6 border-l-4 border-primary/30 pl-4 py-2 text-foreground/90 italic bg-muted/50 rounded-r-md"
           >
-            {children}
+            {withStableKeys(children, `${key}-bq`)}
           </blockquote>
         );
       },
@@ -1072,7 +1056,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
         const key = getElementKey('text', String(children));
         return (
           <strong key={key} className="font-bold text-foreground">
-            {children}
+            {withStableKeys(children, `${key}-s`)}
           </strong>
         );
       },
@@ -1080,22 +1064,25 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
         const key = getElementKey('text', String(children));
         return (
           <em key={key} className="italic text-foreground/95">
-            {children}
+            {withStableKeys(children, `${key}-em`)}
           </em>
         );
       },
       table(children) {
         const key = getElementKey('table');
-        return <MarkdownTableWithActions key={key}>{children}</MarkdownTableWithActions>;
+        return (
+          <MarkdownTableWithActions key={key}>{withStableKeys(children, `${key}-tbl`)}</MarkdownTableWithActions>
+        );
       },
       tableRow(children) {
         const key = getElementKey('tableRow');
-        return <TableRow key={key}>{children}</TableRow>;
+        return <TableRow key={key}>{withStableKeys(children, `${key}-tr`)}</TableRow>;
       },
       tableCell(children, flags) {
         const key = getElementKey('tableCell');
         const alignClass = flags.align ? `text-${flags.align}` : 'text-left';
         const isHeader = flags.header;
+        const cellChildren = withStableKeys(children, `${key}-td`);
 
         return isHeader ? (
           <TableHead
@@ -1105,14 +1092,14 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
               'border-r border-border last:border-r-0 bg-muted/50 font-semibold !p-2 !m-1 !text-wrap',
             )}
           >
-            {children}
+            {cellChildren}
           </TableHead>
         ) : (
           <TableCell
             key={key}
             className={cn(alignClass, 'border-r border-border last:border-r-0 !p-2 !m-1 !text-wrap')}
           >
-            {children}
+            {cellChildren}
           </TableCell>
         );
       },
@@ -1120,7 +1107,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
         const key = getElementKey('table');
         return (
           <TableHeader key={key} className="!p-1 !m-1">
-            {children}
+            {withStableKeys(children, `${key}-thead`)}
           </TableHeader>
         );
       },
@@ -1128,7 +1115,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
         const key = getElementKey('table');
         return (
           <TableBody key={key} className="!text-wrap !m-1">
-            {children}
+            {withStableKeys(children, `${key}-tbody`)}
           </TableBody>
         );
       },
@@ -1165,7 +1152,8 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content,
 }, (prevProps, nextProps) => {
   return (
     prevProps.content === nextProps.content &&
-    prevProps.isUserMessage === nextProps.isUserMessage
+    prevProps.isUserMessage === nextProps.isUserMessage &&
+    prevProps.isStreaming === nextProps.isStreaming
   );
 });
 

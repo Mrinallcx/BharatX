@@ -35,7 +35,8 @@ export type SearchGroupId =
   | 'code'
   | 'connectors'
   | 'prediction'
-  | 'multi-agent';
+  | 'multi-agent'
+  | 'agent-thor';
 
 // Search provider information for dynamic descriptions
 export const searchProviderInfo = {
@@ -135,7 +136,7 @@ export function getSearchGroups(searchProvider: SearchProvider = 'parallel') {
       name: 'CoinGecko',
       description: 'Cryptocurrency research powered by CoinGecko',
       icon: Bitcoin02Icon,
-      show: false, // UI disabled — set true to re-enable CoinGecko mode
+      show: true,
     },
     {
       id: 'youtube' as const,
@@ -153,11 +154,18 @@ export function getSearchGroups(searchProvider: SearchProvider = 'parallel') {
     },
     {
       id: 'multi-agent' as const,
-      name: 'Multi-agent',
+      name: 'Agent Loky',
       description: 'High-agency research with xAI web and X search',
       icon: AtomicPowerIcon,
       show: true,
       comingSoon: true,
+    },
+    {
+      id: 'agent-thor' as const,
+      name: 'Agent Thor',
+      description: 'High-agency web research powered by Kimi',
+      icon: MicroscopeIcon,
+      show: true,
     },
   ] as const;
 }

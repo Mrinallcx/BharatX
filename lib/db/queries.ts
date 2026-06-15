@@ -21,6 +21,45 @@ import { getDodoPayments, setDodoPayments, getDodoProStatus, setDodoProStatus } 
 
 type VisibilityType = 'public' | 'private';
 
+export const GUEST_LOOKOUT_USER_ID = 'lookout-guest';
+const GUEST_LOOKOUT_USER_EMAIL = 'lookout-guest@bharatx.internal';
+
+export async function ensureGuestLookoutUser(): Promise<User> {
+  const existing = await getUserById(GUEST_LOOKOUT_USER_ID);
+  if (existing) return existing;
+
+  const now = new Date();
+  await db
+    .insert(user)
+    .values({
+      id: GUEST_LOOKOUT_USER_ID,
+      name: 'Guest',
+      email: GUEST_LOOKOUT_USER_EMAIL,
+      emailVerified: false,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing();
+
+  const created = await getUserById(GUEST_LOOKOUT_USER_ID);
+  if (!created) {
+    throw new ChatSDKError('bad_request:database', 'Failed to ensure guest lookout user');
+  }
+
+  return created;
+}
+
+export async function resolveLookoutUser(userId: string): Promise<User | null> {
+  const existing = await getUserById(userId);
+  if (existing) return existing;
+
+  if (userId === GUEST_LOOKOUT_USER_ID) {
+    return ensureGuestLookoutUser();
+  }
+
+  return null;
+}
+
 export async function getUser(email: string): Promise<Array<User>> {
   try {
     return await db

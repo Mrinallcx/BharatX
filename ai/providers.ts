@@ -1,36 +1,17 @@
-import { wrapLanguageModel, customProvider, extractReasoningMiddleware, gateway } from 'ai';
-
-import { createOpenAI, openai } from '@ai-sdk/openai';
+import { wrapLanguageModel, customProvider, extractReasoningMiddleware } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { xai } from '@ai-sdk/xai';
 import { groq } from '@ai-sdk/groq';
-import { mistral } from '@ai-sdk/mistral';
-import { google } from '@ai-sdk/google';
-import { anthropic } from "@ai-sdk/anthropic";
-import { cohere } from '@ai-sdk/cohere';
+import {
+  models,
+  DEFAULT_MODEL_ID,
+  SELECTABLE_MODEL_IDS,
+  type Model,
+} from './models-list';
+import type { ModelParameters } from './model-types';
 
 const middleware = extractReasoningMiddleware({
   tagName: 'think',
-});
-
-const middlewareWithStartWithReasoning = extractReasoningMiddleware({
-  tagName: 'think',
-  startWithReasoning: true,
-});
-
-const huggingface = createOpenAI({
-  baseURL: 'https://router.huggingface.co/v1',
-  apiKey: process.env.HF_TOKEN,
-});
-
-const anannas = createOpenAI({
-  baseURL: 'https://api.anannas.ai/v1',
-  apiKey: process.env.ANANNAS_API_KEY,
-  headers: {
-    'HTTP-Referer': 'https://bharat0x.xyz',
-    'X-Title': 'BharatX',
-    'Content-Type': 'application/json',
-  },
 });
 
 const moonshot = createOpenAICompatible({
@@ -39,911 +20,164 @@ const moonshot = createOpenAICompatible({
   apiKey: process.env.MOONSHOT_API_KEY,
 });
 
+/**
+ * Agent Thor custom fetch — does two things on every request to Moonshot:
+ *
+ * Outbound: renames the `kimi_web_search` tool to `$web_search` and changes
+ *   its type to `builtin_function` so Moonshot recognises it as its native
+ *   built-in search.  Also explicitly disables `thinking` ({ type: 'disabled' }),
+ *   which Kimi K2.6 has ON by default. Thinking is incompatible with forced
+ *   tool_choice, the builtin $web_search tool, and our multi-step tool flow.
+ *
+ * Inbound (SSE stream): renames `$web_search` back to `kimi_web_search` in
+ *   every chunk so the Vercel AI SDK can match the tool call to our registered
+ *   tool definition.  The SDK then calls our execute() which returns an empty
+ *   result — Moonshot already ran the search internally and injects real
+ *   results into the model's context regardless of what we return.
+ */
+function createAgentThorFetch(): typeof fetch {
+  const dec = new TextDecoder();
+  const enc = new TextEncoder();
+  // Matches the literal JSON key-value `"name":"$web_search"` in any SSE chunk
+  const RE = /"name"\s*:\s*"\$web_search"/g;
+
+  return async (url, init) => {
+    // ── outbound transform ────────────────────────────────────────────────
+    if (init?.body && typeof init.body === 'string') {
+      const body = JSON.parse(init.body) as Record<string, unknown>;
+
+      if (Array.isArray(body.tools)) {
+        body.tools = (body.tools as any[]).map((t) =>
+          t?.function?.name === 'kimi_web_search'
+            ? { type: 'builtin_function', function: { name: '$web_search' } }
+            : t,
+        );
+      }
+
+      // Keep tool_choice in sync with the renamed tool. The builtin $web_search
+      // can't actually be force-selected, but never leave a dangling reference to
+      // kimi_web_search (which no longer exists in body.tools after the rename).
+      const tc = body.tool_choice as any;
+      if (tc && typeof tc === 'object' && tc.function?.name === 'kimi_web_search') {
+        body.tool_choice = 'auto';
+      }
+
+      // Kimi K2.6 has thinking ENABLED by default and it must be explicitly disabled
+      // (not just omitted). Agent Thor relies on:
+      //   - forced/specified tool_choice (incompatible with thinking)
+      //   - the builtin $web_search tool (incompatible with K2.6 thinking mode)
+      //   - multi-step tool calling (thinking would require preserving reasoning_content
+      //     across every turn, which breaks when earlier turns ran without thinking)
+      // So thinking is disabled for the entire Agent Thor flow to keep every step valid.
+      body.thinking = { type: 'disabled' };
+
+      init = { ...init, body: JSON.stringify(body) };
+    }
+
+    const response = await fetch(url as RequestInfo, init);
+    if (!response.body) return response;
+
+    // ── inbound SSE stream transform ──────────────────────────────────────
+    // Buffer across chunk boundaries so we never split a JSON token.
+    let leftover = '';
+    const transformed = response.body.pipeThrough(
+      new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, ctrl) {
+          leftover += dec.decode(chunk, { stream: true });
+          const lines = leftover.split('\n');
+          leftover = lines.pop() ?? '';
+          ctrl.enqueue(
+            enc.encode(
+              lines.map((l) => l.replace(RE, '"name":"kimi_web_search"')).join('\n') + '\n',
+            ),
+          );
+        },
+        flush(ctrl) {
+          if (leftover) {
+            ctrl.enqueue(enc.encode(leftover.replace(RE, '"name":"kimi_web_search"')));
+          }
+        },
+      }),
+    );
+
+    return new Response(transformed, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  };
+}
+
+const moonshotAgentThorProvider = createOpenAICompatible({
+  name: 'moonshot-thor',
+  baseURL: 'https://api.moonshot.ai/v1',
+  apiKey: process.env.MOONSHOT_API_KEY,
+  fetch: createAgentThorFetch(),
+});
+
+/** Kimi K2.6 with Moonshot $web_search builtin + thinking on synthesis steps. */
+export const moonshotAgentThorModel = moonshotAgentThorProvider('kimi-k2.6');
+
+const groqQwen32b = wrapLanguageModel({
+  model: groq('qwen/qwen3-32b'),
+  middleware,
+});
+
+const groqGptOss20 = wrapLanguageModel({
+  model: groq('openai/gpt-oss-20b'),
+  middleware,
+});
+
+const groqGptOssSafeguard20 = wrapLanguageModel({
+  model: groq('openai/gpt-oss-safeguard-20b'),
+  middleware,
+});
+
+const moonshotKimiK26Think = moonshot('kimi-k2.6');
+
+const groqFollowUp = groq('qwen/qwen3-32b');
+
 export const bharatX = customProvider({
   languageModels: {
-    'bharatx-default': xai('grok-4-fast-non-reasoning'),
-    'bharatx-nano': groq('llama-3.3-70b-versatile'),
-    'bharatx-name': anannas.chat('meta-llama/llama-3.3-70b-instruct'),
-    'bharatx-grok-3-mini': xai('grok-3-mini'),
-    'bharatx-grok-3': xai('grok-3'),
-    'bharatx-grok-4': xai('grok-4'),
-    'bharatx-grok-4-fast': xai('grok-4-fast-non-reasoning'),
-    /** Embeddable page-summary widget (fixed routing; change here without touching widget bundle). */
-    'bharatx-widget': xai('grok-4-fast-non-reasoning'),
+    // Active Groq models (user-selectable)
+    'bharatx-qwen-32b': groqQwen32b,
+    'bharatx-gpt-oss-20': groqGptOss20,
+    'bharatx-gpt-oss-safeguard-20': groqGptOssSafeguard20,
+    // Active xAI / Moonshot models (user-selectable)
     'bharatx-grok-4-fast-think': xai('grok-4-fast'),
-    'bharatx-code': xai('grok-code-fast-1'),
+    'bharatx-kimi-k2-6-think': moonshotKimiK26Think,
+    // Internal / legacy aliases
+    'bharatx-default': moonshotKimiK26Think,
+    'bharatx-widget': groqGptOss20,
+    'bharatx-grok-4-fast': xai('grok-4-fast-non-reasoning'),
+    'bharatx-follow-up': groqFollowUp,
+    'bharatx-name': groqGptOss20,
     'bharatx-enhance': groq('moonshotai/kimi-k2-instruct-0905'),
-    'bharatx-follow-up': xai('grok-4-fast-non-reasoning'),
-    'bharatx-qwen-4b': huggingface.chat('Qwen/Qwen3-4B-Instruct-2507:nscale'),
-    'bharatx-qwen-4b-thinking': wrapLanguageModel({
-      model: huggingface.chat('Qwen/Qwen3-4B-Thinking-2507:nscale'),
-      middleware: [middlewareWithStartWithReasoning],
-    }),
-    'bharatx-gpt-4.1-nano': openai('gpt-4.1-nano'),
-    'bharatx-gpt-4.1-mini': openai('gpt-4.1-mini'),
-    'bharatx-gpt-4.1': openai('gpt-4.1'),
-    'bharatx-gpt5': openai('gpt-5'),
-    'bharatx-gpt5-medium': openai('gpt-5'),
-    'bharatx-gpt5-mini': openai('gpt-5-mini'),
-    'bharatx-gpt5-nano': openai('gpt-5-nano'),
-    'bharatx-o3': openai('o3'),
-    'bharatx-o4-mini': openai('o4-mini'),
-    'bharatx-gpt5-codex': openai('gpt-5-codex'),
-    'bharatx-qwen-32b': wrapLanguageModel({
-      model: groq('qwen/qwen3-32b'),
-      middleware,
-    }),
-    'bharatx-gpt-oss-20': wrapLanguageModel({
-      model: groq('openai/gpt-oss-20b'),
-      middleware,
-    }),
-    'bharatx-gpt-oss-120': wrapLanguageModel({
-      model: gateway('openai/gpt-oss-120b'),
-      middleware,
-    }),
-    'bharatx-deepseek-chat': gateway('deepseek/deepseek-v3.2-exp'),
-    'bharatx-deepseek-chat-think': wrapLanguageModel({
-      model: gateway('deepseek/deepseek-v3.2-exp-thinking'),
-      middleware,
-    }),
-    'bharatx-deepseek-r1': wrapLanguageModel({
-      model: anannas.chat('deepseek/deepseek-r1'),
-      middleware,
-    }),
-    'bharatx-deepseek-r1-0528': wrapLanguageModel({
-      model: anannas.chat('deepseek/deepseek-r1-0528'),
-      middleware,
-    }),
-    'bharatx-qwen-coder': huggingface.chat('Qwen/Qwen3-Coder-480B-A35B-Instruct:cerebras'),
-    'bharatx-qwen-30': huggingface.chat('Qwen/Qwen3-30B-A3B-Instruct-2507:nebius'),
-    'bharatx-qwen-30-think': wrapLanguageModel({
-      model: huggingface.chat('Qwen/Qwen3-30B-A3B-Thinking-2507:nebius'),
-      middleware,
-    }),
-    'bharatx-qwen-3-next': huggingface.chat('Qwen/Qwen3-Next-80B-A3B-Instruct:hyperbolic'),
-    'bharatx-qwen-3-next-think': wrapLanguageModel({
-      model: huggingface.chat('Qwen/Qwen3-Next-80B-A3B-Thinking:hyperbolic'),
-      middleware: [middlewareWithStartWithReasoning],
-    }),
-    'bharatx-qwen-3-max': gateway('alibaba/qwen3-max'),
-    'bharatx-qwen-3-max-preview': gateway('alibaba/qwen3-max-preview'),
-    'bharatx-qwen-235': huggingface.chat('Qwen/Qwen3-235B-A22B-Instruct-2507:fireworks-ai'),
-    'bharatx-qwen-235-think': wrapLanguageModel({
-      model: huggingface.chat('Qwen/Qwen3-235B-A22B-Thinking-2507:fireworks-ai'),
-      middleware: [middlewareWithStartWithReasoning],
-    }),
-    'bharatx-glm-air': gateway('zai/glm-4.5-air'),
-    'bharatx-glm': wrapLanguageModel({
-      model: gateway('zai/glm-4.5'),
-      middleware,
-    }),
-    'bharatx-glm-4.6': wrapLanguageModel({
-      model: huggingface.chat('zai-org/GLM-4.6:novita'),
-      middleware,
-    }),
-    'bharatx-cmd-a': cohere('command-a-03-2025'),
-    'bharatx-cmd-a-think': cohere('command-a-reasoning-08-2025'),
-    'bharatx-kimi-k2-6-think': moonshot('kimi-k2.6'),
-    'bharatx-haiku': anannas.chat('anthropic/claude-3-5-haiku-20241022'),
-    'bharatx-mistral-medium': mistral('mistral-medium-2508'),
-    'bharatx-magistral-small': mistral('magistral-small-2509'),
-    'bharatx-magistral-medium': mistral('magistral-medium-2509'),
-    'bharatx-google-lite': google('gemini-flash-lite-latest'),
-    'bharatx-google': google('gemini-flash-latest'),
-    'bharatx-google-think': google('gemini-flash-latest'),
-    'bharatx-google-pro': google('gemini-2.5-pro'),
-    'bharatx-google-pro-think': google('gemini-2.5-pro'),
-    'bharatx-anthropic': anthropic('claude-sonnet-4-5'),
+    'bharatx-nano': groq('llama-3.3-70b-versatile'),
   },
 });
 
-interface ModelParameters {
-  temperature?: number;
-  topP?: number;
-  topK?: number;
-  minP?: number;
-  frequencyPenalty?: number;
+export { models, DEFAULT_MODEL_ID, SELECTABLE_MODEL_IDS };
+export type { Model };
+
+export function isModelComingSoon(modelValue: string): boolean {
+  const model = getModelConfig(modelValue);
+  return Boolean(model?.comingSoon);
 }
 
-interface Model {
-  value: string;
-  label: string;
-  description: string;
-  vision: boolean;
-  reasoning: boolean;
-  experimental: boolean;
-  category: string;
-  pdf: boolean;
-  pro: boolean;
-  requiresAuth: boolean;
-  freeUnlimited: boolean;
-  maxOutputTokens: number;
-  extreme?: boolean;
-  fast?: boolean;
-  isNew?: boolean;
-  parameters?: ModelParameters;
+export function isSelectableModel(modelValue: string): boolean {
+  return (SELECTABLE_MODEL_IDS as readonly string[]).includes(modelValue);
 }
 
-export const models: Model[] = [
-  // Models (xAI)
-  {
-    value: 'bharatx-grok-4-fast-think',
-    label: 'Grok 4 Fast Thinking',
-    description: "xAI's fastest multimodel reasoning LLM",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Free',
-    pdf: false,
-    pro: false,
-    requiresAuth: false,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    extreme: true,
-    fast: true,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-kimi-k2-6-think',
-    label: 'Kimi K2.6 Thinking',
-    description: "Moonshot AI's advanced reasoning LLM",
-    vision: false,
-    reasoning: true,
-    experimental: false,
-    category: 'Free',
-    pdf: false,
-    pro: false,
-    requiresAuth: false,
-    freeUnlimited: false,
-    maxOutputTokens: 32768,
-    fast: true,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-grok-3-mini',
-    label: 'Grok 3 Mini',
-    description: "xAI's recent smallest LLM",
-    vision: false,
-    reasoning: true,
-    experimental: false,
-    category: 'Free',
-    pdf: false,
-    pro: false,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-  },
-  {
-    value: 'bharatx-grok-3',
-    label: 'Grok 3',
-    description: "xAI's recent smartest LLM",
-    vision: false,
-    reasoning: false,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-  },
-  {
-    value: 'bharatx-grok-4',
-    label: 'Grok 4',
-    description: "xAI's most intelligent LLM",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-  },
-  {
-    value: 'bharatx-default',
-    label: 'Grok 4 Fast',
-    description: "xAI's fastest multimodel LLM",
-    vision: true,
-    reasoning: false,
-    experimental: false,
-    category: 'Free',
-    pdf: false,
-    pro: false,
-    requiresAuth: false,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    extreme: true,
-    fast: true,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-qwen-32b',
-    label: 'Qwen 3 32B',
-    description: "Alibaba's advanced reasoning LLM",
-    vision: false,
-    reasoning: false,
-    experimental: false,
-    category: 'Free',
-    pdf: false,
-    pro: false,
-    requiresAuth: false,
-    freeUnlimited: false,
-    maxOutputTokens: 40960,
-    fast: true,
-    parameters: {
-      temperature: 0.7,
-      topP: 0.8,
-      topK: 20,
-      minP: 0,
-    },
-  },
-  {
-    value: 'bharatx-qwen-4b',
-    label: 'Qwen 3 4B',
-    description: "Alibaba's small base LLM",
-    vision: false,
-    reasoning: false,
-    experimental: false,
-    category: 'Free',
-    pdf: false,
-    pro: false,
-    requiresAuth: false,
-    maxOutputTokens: 16000,
-    freeUnlimited: false,
-    parameters: {
-      temperature: 0.7,
-      topP: 0.8,
-      topK: 20,
-      minP: 0,
-    },
-  },
-  {
-    value: 'bharatx-qwen-4b-thinking',
-    label: 'Qwen 3 4B Thinking',
-    description: "Alibaba's small base LLM",
-    vision: false,
-    reasoning: true,
-    experimental: false,
-    category: 'Free',
-    pdf: false,
-    pro: false,
-    requiresAuth: true,
-    maxOutputTokens: 16000,
-    freeUnlimited: false,
-    parameters: {
-      temperature: 0.6,
-      topP: 0.95,
-      topK: 20,
-      minP: 0,
-    },
-  },
-  {
-    value: 'bharatx-gpt-oss-20',
-    label: 'GPT OSS 20B',
-    description: "OpenAI's small OSS LLM",
-    vision: false,
-    reasoning: false,
-    experimental: false,
-    category: 'Free',
-    pdf: false,
-    pro: false,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    fast: true,
-  },
-  {
-    value: 'bharatx-gpt5-nano',
-    label: 'GPT 5 Nano',
-    description: "OpenAI's smallest flagship LLM",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Free',
-    pdf: true,
-    pro: false,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    extreme: true,
-    fast: true,
-  },
-  {
-    value: 'bharatx-google-lite',
-    label: 'Gemini 2.5 Flash Lite',
-    description: "Google's advanced small LLM",
-    vision: true,
-    reasoning: false,
-    experimental: false,
-    category: 'Free',
-    pdf: true,
-    pro: false,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 10000,
-    extreme: true,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-code',
-    label: 'Grok Code',
-    description: "xAI's advanced coding LLM",
-    vision: false,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    fast: true,
-  },
-  {
-    value: 'bharatx-mistral-medium',
-    label: 'Mistral Medium',
-    description: "Mistral's medium multi-modal LLM",
-    vision: true,
-    reasoning: false,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-magistral-small',
-    label: 'Magistral Small',
-    description: "Mistral's small reasoning LLM",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-magistral-medium',
-    label: 'Magistral Medium',
-    description: "Mistral's medium reasoning LLM",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-gpt-oss-120',
-    label: 'GPT OSS 120B',
-    description: "OpenAI's advanced OSS LLM",
-    vision: false,
-    reasoning: false,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    fast: true,
-  },
-  {
-    value: 'bharatx-gpt-4.1-nano',
-    label: 'GPT 4.1 Nano',
-    description: "OpenAI's smallest LLM",
-    vision: true,
-    reasoning: false,
-    experimental: false,
-    category: 'Free',
-    pdf: true,
-    pro: false,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    extreme: true,
-    fast: true,
-  },
-  {
-    value: 'bharatx-gpt-4.1-mini',
-    label: 'GPT 4.1 Mini',
-    description: "OpenAI's small LLM",
-    vision: true,
-    reasoning: false,
-    category: 'Free',
-    pdf: true,
-    pro: false,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    fast: true,
-    extreme: true,
-    experimental: false,
-  },
-  {
-    value: 'bharatx-gpt-4.1',
-    label: 'GPT 4.1',
-    description: "OpenAI's LLM",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    extreme: true,
-    fast: false,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-gpt5-mini',
-    label: 'GPT 5 Mini',
-    description: "OpenAI's small flagship LLM",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    extreme: true,
-    fast: false,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-gpt5',
-    label: 'GPT 5',
-    description: "OpenAI's flagship LLM",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    extreme: true,
-    fast: false,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-o4-mini',
-    label: 'o4 mini',
-    description: "OpenAI's recent mini reasoning LLM",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    fast: false,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-o3',
-    label: 'o3',
-    description: "OpenAI's advanced LLM",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    fast: false,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-gpt5-medium',
-    label: 'GPT 5 Medium',
-    description: "OpenAI's latest flagship reasoning LLM",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    extreme: true,
-    fast: false,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-gpt5-codex',
-    label: 'GPT 5 Codex',
-    description: "OpenAI's advanced coding LLM",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    extreme: true,
-    fast: false,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-cmd-a',
-    label: 'Command A',
-    description: "Cohere's advanced command LLM",
-    vision: false,
-    reasoning: false,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-cmd-a-think',
-    label: 'Command A Thinking',
-    description: "Cohere's advanced command LLM with thinking",
-    vision: false,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-deepseek-chat',
-    label: 'DeepSeek 3.2 Exp',
-    description: "DeepSeek's advanced chat LLM",
-    vision: false,
-    reasoning: false,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-deepseek-chat-think',
-    label: 'DeepSeek 3.2 Exp Thinking',
-    description: "DeepSeek's advanced chat LLM with thinking",
-    vision: false,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-deepseek-r1',
-    label: 'DeepSeek R1',
-    description: "DeepSeek's advanced reasoning LLM",
-    vision: false,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-deepseek-r1-0528',
-    label: 'DeepSeek R1 0528',
-    description: "DeepSeek's advanced reasoning LLM",
-    vision: false,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 16000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-qwen-coder',
-    label: 'Qwen 3 Coder 480B-A35B',
-    description: "Alibaba's advanced coding LLM",
-    vision: false,
-    reasoning: false,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 130000,
-    fast: true,
-  },
-  {
-    value: 'bharatx-qwen-3-next',
-    label: 'Qwen 3 Next 80B A3B Instruct',
-    description: "Qwen's advanced instruct LLM",
-    vision: false,
-    reasoning: false,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 100000,
-    fast: true,
-    isNew: true,
-    parameters: {
-      temperature: 0.7,
-      topP: 0.8,
-      minP: 0,
-    },
-  },
-  {
-    value: 'bharatx-qwen-3-next-think',
-    label: 'Qwen 3 Next 80B A3B Thinking',
-    description: "Qwen's advanced thinking LLM",
-    vision: false,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 100000,
-    isNew: true,
-    parameters: {
-      temperature: 0.6,
-      topP: 0.95,
-      minP: 0,
-    },
-  },
-  {
-    value: 'bharatx-qwen-3-max',
-    label: 'Qwen 3 Max',
-    description: "Qwen's advanced instruct LLM",
-    vision: false,
-    reasoning: false,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 10000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-qwen-3-max-preview',
-    label: 'Qwen 3 Max Preview',
-    description: "Qwen's advanced instruct LLM",
-    vision: false,
-    reasoning: false,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 10000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-qwen-235',
-    label: 'Qwen 3 235B A22B',
-    description: "Qwen's advanced instruct LLM",
-    vision: false,
-    reasoning: false,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 100000,
-    parameters: {
-      temperature: 0.7,
-      topP: 0.8,
-      minP: 0,
-    },
-  },
-  {
-    value: 'bharatx-qwen-235-think',
-    label: 'Qwen 3 235B A22B Thinking',
-    description: "Qwen's advanced thinking LLM",
-    vision: false,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 100000,
-    parameters: {
-      temperature: 0.6,
-      topP: 0.95,
-      minP: 0,
-    },
-  },
-  {
-    value: 'bharatx-glm-4.6',
-    label: 'GLM 4.6',
-    description: "Zhipu AI's advanced reasoning LLM",
-    vision: false,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 130000,
-    isNew: true,
-    parameters: {
-      temperature: 1,
-      topP: 0.95,
-    },
-  },
-  {
-    value: 'bharatx-glm-air',
-    label: 'GLM 4.5 Air',
-    description: "Zhipu AI's efficient base LLM",
-    vision: false,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 130000,
-  },
-  {
-    value: 'bharatx-glm',
-    label: 'GLM 4.5',
-    description: "Zhipu AI's previous advanced LLM",
-    vision: false,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: false,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 13000,
-  },
-  {
-    value: 'bharatx-google',
-    label: 'Gemini 2.5 Flash',
-    description: "Google's advanced small LLM",
-    vision: true,
-    reasoning: false,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    extreme: true,
-    maxOutputTokens: 10000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-google-think',
-    label: 'Gemini 2.5 Flash Thinking',
-    description: "Google's advanced small LLM with thinking",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    extreme: true,
-    maxOutputTokens: 10000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-google-pro',
-    label: 'Gemini 2.5 Pro',
-    description: "Google's advanced LLM",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    extreme: true,
-    maxOutputTokens: 10000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-google-pro-think',
-    label: 'Gemini 2.5 Pro Thinking',
-    description: "Google's advanced LLM with thinking",
-    vision: true,
-    reasoning: true,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    extreme: true,
-    maxOutputTokens: 10000,
-    isNew: true,
-  },
-  {
-    value: 'bharatx-anthropic',
-    label: 'Claude Sonnet 4.5',
-    description: "Anthropic's latest and greatest LLM",
-    vision: true,
-    reasoning: false,
-    experimental: false,
-    category: 'Pro',
-    pdf: true,
-    pro: true,
-    requiresAuth: true,
-    freeUnlimited: false,
-    maxOutputTokens: 8000,
-    isNew: true,
-  },
-];
-
-// Helper functions for model access checks
 export function getModelConfig(modelValue: string) {
   return models.find((model) => model.value === modelValue);
 }
 
-export function requiresAuthentication(modelValue: string): boolean {
-  // All models available to everyone (including guests) - no authentication required
+export function requiresAuthentication(_modelValue: string): boolean {
   return false;
 }
 
-export function requiresProSubscription(modelValue: string): boolean {
-  // All models available to everyone - no Pro subscription required
+export function requiresProSubscription(_modelValue: string): boolean {
   return false;
 }
 
@@ -982,25 +216,24 @@ export function getModelParameters(modelValue: string): ModelParameters {
   return model?.parameters || {};
 }
 
-// Access control helper - ALL MODELS AVAILABLE TO EVERYONE
-export function canUseModel(modelValue: string, user: any, isProUser: boolean): { canUse: boolean; reason?: string } {
+export function canUseModel(modelValue: string, _user: unknown, _isProUser: boolean): { canUse: boolean; reason?: string } {
   const model = getModelConfig(modelValue);
 
   if (!model) {
     return { canUse: false, reason: 'Model not found' };
   }
 
-  // All models available to everyone (guests and authenticated users)
+  if (model.comingSoon || !isSelectableModel(modelValue)) {
+    return { canUse: false, reason: 'Model coming soon' };
+  }
+
   return { canUse: true };
 }
 
-// Helper to check if user should bypass rate limits - ALL USERS BYPASS LIMITS
-export function shouldBypassRateLimits(modelValue: string, user: any): boolean {
-  // Always bypass limits - all features free for everyone
+export function shouldBypassRateLimits(_modelValue: string, _user: unknown): boolean {
   return true;
 }
 
-// Get acceptable file types for a model
 export function getAcceptedFileTypes(modelValue: string, isProUser: boolean): string {
   const model = getModelConfig(modelValue);
   if (model?.pdf && isProUser) {
@@ -1009,46 +242,30 @@ export function getAcceptedFileTypes(modelValue: string, isProUser: boolean): st
   return 'image/*';
 }
 
-// Check if a model supports extreme mode
 export function supportsExtremeMode(modelValue: string): boolean {
   const model = getModelConfig(modelValue);
   return model?.extreme || false;
 }
 
-// Get models that support extreme mode
 export function getExtremeModels(): Model[] {
-  return models.filter((model) => model.extreme);
+  return models.filter((model) => model.extreme && !model.comingSoon);
 }
 
-// Restricted regions for OpenAI and Anthropic models
-const RESTRICTED_REGIONS = ['CN', 'KP', 'RU']; // China, North Korea, Russia
+const RESTRICTED_REGIONS = ['CN', 'KP', 'RU'];
 
-// Models that should be filtered in restricted regions
-const OPENAI_MODELS = [
-  'bharatx-gpt5',
-  'bharatx-gpt5-mini',
-  'bharatx-gpt5-nano',
-  'bharatx-o3',
-  'bharatx-gpt-oss-20',
-  'bharatx-gpt-oss-120',
-];
+const OPENAI_MODELS = ['bharatx-gpt-oss-20', 'bharatx-gpt-oss-safeguard-20'];
 
-const ANTHROPIC_MODELS = ['bharatx-haiku', 'bharatx-anthropic'];
+const ANTHROPIC_MODELS = ['bharatx-anthropic'];
 
-// Check if a model should be filtered based on region
 export function isModelRestrictedInRegion(modelValue: string, countryCode?: string): boolean {
   if (!countryCode) return false;
 
   const isRestricted = RESTRICTED_REGIONS.includes(countryCode.toUpperCase());
   if (!isRestricted) return false;
 
-  const isOpenAI = OPENAI_MODELS.includes(modelValue);
-  const isAnthropic = ANTHROPIC_MODELS.includes(modelValue);
-
-  return isOpenAI || isAnthropic;
+  return OPENAI_MODELS.includes(modelValue) || ANTHROPIC_MODELS.includes(modelValue);
 }
 
-// Filter models based on user's region
 export function getFilteredModels(countryCode?: string): Model[] {
   if (!countryCode || !RESTRICTED_REGIONS.includes(countryCode.toUpperCase())) {
     return models;
@@ -1057,7 +274,6 @@ export function getFilteredModels(countryCode?: string): Model[] {
   return models.filter((model) => !isModelRestrictedInRegion(model.value, countryCode));
 }
 
-// Legacy arrays for backward compatibility (deprecated - use helper functions instead)
 export const authRequiredModels = models.filter((m) => m.requiresAuth).map((m) => m.value);
 export const proRequiredModels = models.filter((m) => m.pro).map((m) => m.value);
 export const freeUnlimitedModels = models.filter((m) => m.freeUnlimited).map((m) => m.value);

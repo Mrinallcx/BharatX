@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionCookie } from 'better-auth/cookies';
+import { isPageTemporarilyDisabled } from '@/lib/constants';
 
 const authRoutes = ['/sign-in', '/sign-up'];
 // All routes are now accessible to everyone - no protected routes
@@ -34,6 +35,11 @@ export async function proxy(request: NextRequest) {
 
   // Redirect sign-in and sign-up routes to main page (disabled)
   if (authRoutes.some((route) => pathname.startsWith(route))) {
+    return NextResponse.redirect(new URL('/', request.url));
+  }
+
+  // Temporarily disabled pages → main chat
+  if (isPageTemporarilyDisabled(pathname)) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 

@@ -8,7 +8,8 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useReducer, useSt
 import { useChat } from '@ai-sdk/react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Crown02Icon } from '@hugeicons/core-free-icons';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+import { IBM_Plex_Sans } from 'next/font/google';
 import Image from 'next/image';
 import { parseAsString, useQueryState } from 'nuqs';
 import { toast } from 'sonner';
@@ -33,10 +34,10 @@ import { useUser } from '@/contexts/user-context';
 import { useOptimizedScroll } from '@/hooks/use-optimized-scroll';
 
 // Utility and type imports
-import { SEARCH_LIMITS } from '@/lib/constants';
+import { SEARCH_LIMITS, TEMPORARILY_DISABLED_PAGES } from '@/lib/constants';
 import { ChatSDKError } from '@/lib/errors';
 import { cn, SearchGroupId, invalidateChatsCache, isSearchGroupComingSoon } from '@/lib/utils';
-import { requiresProSubscription } from '@/ai/providers';
+import { requiresProSubscription, DEFAULT_MODEL_ID, isSelectableModel, isModelComingSoon } from '@/ai/providers';
 import { ConnectorProvider } from '@/lib/connectors';
 import { MarketTickerStrip, MARKET_TICKER_HEIGHT_CLASS } from '@/components/market-ticker-strip';
 
@@ -45,6 +46,11 @@ import { chatReducer, createInitialState } from '@/components/chat-state';
 import { useDataStream } from './data-stream-provider';
 import { DefaultChatTransport } from 'ai';
 import { ChatMessage } from '@/lib/types';
+
+const ibmPlexSans = IBM_Plex_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+});
 
 interface ChatInterfaceProps {
   initialChatId?: string;
@@ -61,11 +67,12 @@ const ChatInterface = memo(
     isOwner = true,
   }: ChatInterfaceProps): React.JSX.Element => {
     const router = useRouter();
+    const pathname = usePathname();
     const [query] = useQueryState('query', parseAsString.withDefault(''));
     const [q] = useQueryState('q', parseAsString.withDefault(''));
     const [input, setInput] = useState<string>('');
 
-    const [selectedModel, setSelectedModel] = useLocalStorage('bharatx-selected-model', 'bharatx-grok-4-fast-think');
+    const [selectedModel, setSelectedModel] = useLocalStorage('bharatx-selected-model', DEFAULT_MODEL_ID);
     const [selectedGroup, setSelectedGroup] = useLocalStorage<SearchGroupId>('bharatx-selected-group', 'web');
 
     useEffect(() => {
@@ -85,6 +92,7 @@ const ChatInterface = memo(
 
     const handleOpenSettings = useCallback(
       (tab: string = 'profile') => {
+        if (TEMPORARILY_DISABLED_PAGES.settings) return;
         setSettingsInitialTab(tab);
         router.push(tab ? `/settings?tab=${encodeURIComponent(tab)}` : '/settings');
       },
@@ -178,19 +186,23 @@ const ChatInterface = memo(
       usageData.count >= SEARCH_LIMITS.DAILY_SEARCH_LIMIT;
     const isLimitBlocked = Boolean(hasExceededLimit);
 
+    // Migrate legacy or unavailable model selections to the default
+    useEffect(() => {
+      if (!isSelectableModel(selectedModel) || isModelComingSoon(selectedModel)) {
+        setSelectedModel(DEFAULT_MODEL_ID);
+      }
+    }, [selectedModel, setSelectedModel]);
+
     // Auto-switch away from pro models when user loses pro access
     useEffect(() => {
       if (proStatusLoading) return;
 
       const currentModelRequiresPro = requiresProSubscription(selectedModel);
 
-      // If current model requires pro but user is not pro, switch to default
-      // Also prevent infinite loops by ensuring we're not already on the default model
-      if (currentModelRequiresPro && !isUserPro && selectedModel !== 'bharatx-grok-4-fast-think') {
-        console.log(`Auto-switching from pro model '${selectedModel}' to 'bharatx-grok-4-fast-think' - user lost pro access`);
-        setSelectedModel('bharatx-grok-4-fast-think');
+      if (currentModelRequiresPro && !isUserPro && selectedModel !== DEFAULT_MODEL_ID) {
+        console.log(`Auto-switching from pro model '${selectedModel}' to '${DEFAULT_MODEL_ID}' - user lost pro access`);
+        setSelectedModel(DEFAULT_MODEL_ID);
 
-        // Show a toast notification to inform the user
         toast.info('Switched to default model - Pro subscription required for premium models');
       }
     }, [selectedModel, isUserPro, proStatusLoading, setSelectedModel]);
@@ -234,6 +246,7 @@ const ChatInterface = memo(
 
     // Timer for lookout announcement - show after 30 seconds for authenticated users
     useEffect(() => {
+      if (TEMPORARILY_DISABLED_PAGES.lookout) return;
       if (user && !chatState.hasShownAnnouncementDialog) {
         const timer = setTimeout(() => {
           dispatch({ type: 'SET_SHOW_ANNOUNCEMENT_DIALOG', payload: true });
@@ -806,16 +819,17 @@ const ChatInterface = memo(
                   <ExampleCategories
                     onSelectExample={(text, group) => {
                       if (group) {
-                        setSelectedGroup(group as SearchGroupId);
+                        const nextGroup = group as SearchGroupId;
+                        setSelectedGroup(nextGroup);
+                        selectedGroupRef.current = nextGroup;
                       }
-                      setInput(text);
-                      setTimeout(() => {
-                        sendMessage({
-                          parts: [{ type: 'text', text }],
-                          role: 'user',
-                        });
-                        dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
-                      }, 100);
+                      lastSubmittedQueryRef.current = text.trim();
+                      setInput('');
+                      sendMessage({
+                        parts: [{ type: 'text', text }],
+                        role: 'user',
+                      });
+                      dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
                     }}
                     className="mt-4"
                   />
@@ -879,6 +893,23 @@ const ChatInterface = memo(
             </div>
           )}
         </div>
+
+        {pathname === '/' && messages.length === 0 && !chatState.hasSubmitted && status === 'ready' && (
+          <div className="fixed bottom-4 left-0 right-0 z-10 flex justify-center">
+            <span className={`${ibmPlexSans.className} inline-flex items-center gap-1 rounded-lg shadow-sm ring-1 ring-ring/35 ring-offset-1 ring-offset-background bg-gradient-to-br from-secondary/25 via-primary/20 to-accent/25 text-foreground px-2.5 pt-0.5 pb-2 sm:pt-1 text-xs sm:text-sm leading-3 dark:bg-gradient-to-br dark:from-primary dark:via-secondary dark:to-primary dark:text-foreground`}>
+              Initiated by{' '}
+              <a
+                href="https://lcx.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold hover:underline"
+                style={{ color: '#2B6BFF' }}
+              >
+                LCX
+              </a>
+            </span>
+          </div>
+        )}
       </div>
     );
   },

@@ -447,7 +447,7 @@ export default function XQLPage() {
                                 if (tweetId) {
                                   return (
                                     <div key={i} className="w-full max-w-lg sm:max-w-xl tweet-wrapper-sheet">
-                                      <Tweet id={tweetId} />
+                                      <Tweet id={tweetId} apiUrl={`/api/tweet/${tweetId}`} />
                                     </div>
                                   );
                                 }

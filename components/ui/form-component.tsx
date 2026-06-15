@@ -16,6 +16,9 @@ import {
   getFilteredModels,
   isModelRestrictedInRegion,
   supportsExtremeMode,
+  isSelectableModel,
+  isModelComingSoon,
+  DEFAULT_MODEL_ID,
 } from '@/ai/providers';
 import { X, Check, ChevronsUpDown, Wand2, Upload, CheckIcon, Zap, Sparkles, ArrowUpRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog';
@@ -45,15 +48,18 @@ import TextRotate from '@/components/ui/text-rotate';
 import { Plus, ChevronDown } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
+const MODEL_CATEGORY_LABELS: Record<string, string> = {
+  Best: 'Best model',
+  Free: 'Free Models',
+  'Coming soon': 'Coming soon Models',
+  Pro: 'Pro Models',
+  Experimental: 'Experimental Models',
+};
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import { Switch } from '@/components/ui/switch';
 import { UseChatHelpers } from '@ai-sdk/react';
 
-/** Models available to all users in the picker (not Pro-gated). */
-const SELECTABLE_FREE_MODELS = new Set([
-  'bharatx-grok-4-fast-think',
-  'bharatx-kimi-k2-6-think',
-]);
 import { ChatMessage } from '@/lib/types';
 import { useLocation } from '@/hooks/use-location';
 import { useLocalStorage } from '@/hooks/use-local-storage';
@@ -458,7 +464,7 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
     // Persisted ordering: category order and per-category model order
     const [modelCategoryOrder] = useLocalStorage<string[]>(
       'bharatx-model-category-order',
-      isProUser ? ['Pro', 'Experimental', 'Free'] : ['Free', 'Experimental', 'Pro'],
+      isProUser ? ['Pro', 'Experimental', 'Best', 'Free', 'Coming soon'] : ['Best', 'Free', 'Coming soon', 'Experimental', 'Pro'],
     );
     const [modelOrderMap] = useLocalStorage<Record<string, string[]>>('bharatx-model-order', {});
 
@@ -466,13 +472,16 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
       const baseOrder = modelCategoryOrder && modelCategoryOrder.length > 0
         ? modelCategoryOrder
         : isProUser
-          ? ['Pro', 'Experimental', 'Free']
-          : ['Free', 'Experimental', 'Pro'];
+          ? ['Pro', 'Experimental', 'Best', 'Free', 'Coming soon']
+          : ['Best', 'Free', 'Coming soon', 'Experimental', 'Pro'];
       const categoriesPresent = Object.keys(groupedModels);
-      const normalizedOrder = [
+      let normalizedOrder = [
         ...baseOrder.filter((c) => categoriesPresent.includes(c)),
         ...categoriesPresent.filter((c) => !baseOrder.includes(c)),
       ];
+      if (normalizedOrder.includes('Best') && normalizedOrder[0] !== 'Best') {
+        normalizedOrder = ['Best', ...normalizedOrder.filter((c) => c !== 'Best')];
+      }
       const normalizedByCategory = normalizedOrder
         .filter((category) => groupedModels[category] && groupedModels[category].length > 0)
         .map((category) => {
@@ -519,22 +528,18 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
       const currentModelRequiresPro = false;
       const currentModelExists = availableModels.find((m) => m.value === selectedModel);
       const isCurrentModelRestricted = isModelRestrictedInRegion(selectedModel, countryCode || undefined);
+      const isCurrentModelUnavailable =
+        !isSelectableModel(selectedModel) || isModelComingSoon(selectedModel) || !currentModelExists;
 
-      // If current model is restricted in user's region, switch to default
-        if (isCurrentModelRestricted && selectedModel !== 'bharatx-grok-4-fast-think') {
-          console.log(`Auto-switching from restricted model '${selectedModel}' to 'bharatx-grok-4-fast-think' - model not available in region ${countryCode}`);
-          setSelectedModel('bharatx-grok-4-fast-think');
-        toast.info('Switched to default model - Selected model not available in your region');
+      if (isCurrentModelUnavailable && selectedModel !== DEFAULT_MODEL_ID) {
+        setSelectedModel(DEFAULT_MODEL_ID);
         return;
       }
 
-      // All models available to everyone - no model switching needed
-      if (false) { // Disabled - all models free
-          console.log(`Auto-switching from pro model '${selectedModel}' to 'bharatx-grok-4-fast-think' - user lost pro access`);
-          setSelectedModel('bharatx-grok-4-fast-think');
-
-        // Show a toast notification to inform the user
-        toast.info('Switched to default model - Pro subscription required for premium models');
+      if (isCurrentModelRestricted && selectedModel !== DEFAULT_MODEL_ID) {
+        setSelectedModel(DEFAULT_MODEL_ID);
+        toast.info('Switched to default model - Selected model not available in your region');
+        return;
       }
     }, [selectedModel, isProUser, isSubscriptionLoading, setSelectedModel, availableModels, countryCode]);
 
@@ -542,6 +547,10 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
       (value: string) => {
         const model = availableModels.find((m) => m.value === value);
         if (!model) return;
+
+        if (!isSelectableModel(model.value) || isModelComingSoon(model.value)) {
+          return;
+        }
 
         // All models available to everyone - no auth or pro checks
         const requiresAuth = false;
@@ -604,8 +613,8 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
                   const requiresAuth = requiresAuthentication(model.value) && !user;
                   const requiresPro = requiresProSubscription(model.value) && !isProUser;
                   const isLocked = requiresAuth || requiresPro;
-                  // Only allow selectable free models to be clickable
-                  const isNotAllowed = !SELECTABLE_FREE_MODELS.has(model.value);
+                  const isComingSoon = isModelComingSoon(model.value);
+                  const isNotAllowed = !isSelectableModel(model.value) || isComingSoon;
 
                   if (isLocked || isNotAllowed) {
                     return (
@@ -621,7 +630,7 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
                             return;
                           }
 
-                          // Prevent action for models that are not allowed (except Grok 4 Fast Thinking)
+                          // Prevent action for coming soon or non-selectable models
                           if (isNotAllowed) {
                             return;
                           }
@@ -654,7 +663,11 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
                               <span className="inline">{model.label}</span>
                             )}
                           </div>
-                          {isNotAllowed ? (
+                          {isComingSoon ? (
+                            <span className="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-medium bg-muted text-muted-foreground border border-border/60 flex-shrink-0">
+                              Coming soon
+                            </span>
+                          ) : isNotAllowed ? (
                             <LockIcon className={cn('text-muted-foreground flex-shrink-0', isMobile ? 'size-3.5' : 'size-3')} />
                           ) : requiresAuth ? (
                             <LockIcon className={cn('text-muted-foreground flex-shrink-0', isMobile ? 'size-3.5' : 'size-3')} />
@@ -833,15 +846,15 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
                   <div
                     className={cn('font-medium text-muted-foreground px-2 py-1', isMobile ? 'text-xs' : 'text-[10px]')}
                   >
-                    {String(category)} Models
+                    {MODEL_CATEGORY_LABELS[String(category)] ?? `${String(category)} Models`}
                   </div>
                 )}
                 {categoryModels.map((model) => {
                   const requiresAuth = requiresAuthentication(model.value) && !user;
                   const requiresPro = requiresProSubscription(model.value) && !isProUser;
                   const isLocked = requiresAuth || requiresPro;
-                  // Only allow selectable free models to be clickable
-                  const isNotAllowed = !SELECTABLE_FREE_MODELS.has(model.value);
+                  const isComingSoon = isModelComingSoon(model.value);
+                  const isNotAllowed = !isSelectableModel(model.value) || isComingSoon;
 
                   if (isLocked || isNotAllowed) {
                     return (
@@ -857,7 +870,7 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
                             return;
                           }
 
-                          // Prevent action for models that are not allowed (except Grok 4 Fast Thinking)
+                          // Prevent action for coming soon or non-selectable models
                           if (isNotAllowed) {
                             return;
                           }
@@ -890,7 +903,11 @@ const ModelSwitcher: React.FC<ModelSwitcherProps> = React.memo(
                               <span className="inline">{model.label}</span>
                             )}
                           </div>
-                          {isNotAllowed ? (
+                          {isComingSoon ? (
+                            <span className="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-medium bg-muted text-muted-foreground border border-border/60 flex-shrink-0">
+                              Coming soon
+                            </span>
+                          ) : isNotAllowed ? (
                             <LockIcon className={cn('text-muted-foreground flex-shrink-0', isMobile ? 'size-3.5' : 'size-3')} />
                           ) : requiresAuth ? (
                             <LockIcon className={cn('text-muted-foreground flex-shrink-0', isMobile ? 'size-3.5' : 'size-3')} />
@@ -2359,7 +2376,6 @@ const FormComponent: React.FC<FormComponentProps> = ({
       'chat',
       'memory',
       'youtube',
-      'crypto',
       'prediction',
     ];
     if (disabledGroups.includes(selectedGroup)) {
@@ -2801,7 +2817,7 @@ const FormComponent: React.FC<FormComponentProps> = ({
           
           if (extremeModels.length > 0) {
             // Prioritize: scira-grok-4-fast-think if available, otherwise first free model, then first available
-            const defaultModel = extremeModels.find((m) => m.value === 'bharatx-grok-4-fast-think');
+            const defaultModel = extremeModels.find((m) => m.value === DEFAULT_MODEL_ID);
             const firstFreeModel = extremeModels.find((m) => !m.pro);
             const fallbackModel = extremeModels[0];
             

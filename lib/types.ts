@@ -143,6 +143,7 @@ export const messageMetadataSchema = z.object({
   createdAt: z.string(),
   model: z.string(),
   multiAgentMode: z.boolean().optional(),
+  agentThorMode: z.boolean().optional(),
   completionTime: z.number().nullable(),
   inputTokens: z.number().nullable(),
   outputTokens: z.number().nullable(),
@@ -225,6 +226,12 @@ export type ChatTools = {
 
   xai_web_search: webSearch;
   xai_x_search: xSearchTool;
+
+  // Agent Thor — Moonshot's $web_search builtin
+  kimi_web_search: {
+    input: Record<string, unknown>;
+    output: { ok?: boolean; query?: string };
+  };
 };
 
 export type CustomUIDataTypes = {

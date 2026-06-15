@@ -32,6 +32,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import { BinocularsIcon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
+import { TEMPORARILY_DISABLED_PAGES } from '@/lib/constants';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { ThemeSwitcher } from './theme-switcher';
 import { useRouter } from 'next/navigation';
@@ -93,11 +94,28 @@ const NavigationMenu = memo(() => {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem className="cursor-pointer" asChild>
-          <Link href="/xql" className="w-full flex items-center gap-2">
-            <XLogoIcon size={16} />
-            <span>XQL</span>
-          </Link>
+        <DropdownMenuItem
+          disabled={TEMPORARILY_DISABLED_PAGES.xql}
+          className={cn(
+            TEMPORARILY_DISABLED_PAGES.xql && 'opacity-50 cursor-not-allowed pointer-events-none',
+            !TEMPORARILY_DISABLED_PAGES.xql && 'cursor-pointer',
+          )}
+          asChild={!TEMPORARILY_DISABLED_PAGES.xql}
+          onSelect={(event) => {
+            if (TEMPORARILY_DISABLED_PAGES.xql) event.preventDefault();
+          }}
+        >
+          {TEMPORARILY_DISABLED_PAGES.xql ? (
+            <>
+              <XLogoIcon size={16} />
+              <span>XQL</span>
+            </>
+          ) : (
+            <Link href="/xql" className="w-full flex items-center gap-2">
+              <XLogoIcon size={16} />
+              <span>XQL</span>
+            </Link>
+          )}
         </DropdownMenuItem>
 
         <DropdownMenuItem
@@ -274,13 +292,33 @@ const UserProfile = memo(
                 </div>
               </div>
 
-              <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/settings')}>
+              <DropdownMenuItem
+                disabled={TEMPORARILY_DISABLED_PAGES.settings}
+                className={cn(
+                  TEMPORARILY_DISABLED_PAGES.settings
+                    ? 'opacity-50 cursor-not-allowed pointer-events-none'
+                    : 'cursor-pointer',
+                )}
+                onClick={() => {
+                  if (!TEMPORARILY_DISABLED_PAGES.settings) router.push('/settings');
+                }}
+              >
                 <div className="w-full flex items-center gap-2">
                   <GearIcon size={16} />
                   <span>Settings</span>
                 </div>
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/lookout')}>
+              <DropdownMenuItem
+                disabled={TEMPORARILY_DISABLED_PAGES.lookout}
+                className={cn(
+                  TEMPORARILY_DISABLED_PAGES.lookout
+                    ? 'opacity-50 cursor-not-allowed pointer-events-none'
+                    : 'cursor-pointer',
+                )}
+                onClick={() => {
+                  if (!TEMPORARILY_DISABLED_PAGES.lookout) router.push('/lookout');
+                }}
+              >
                 <div className="w-full flex items-center gap-2">
                   <HugeiconsIcon size={16} icon={BinocularsIcon} />
                   <span>Lookout</span>

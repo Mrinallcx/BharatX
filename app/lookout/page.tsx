@@ -32,7 +32,6 @@ import { LoadingSkeletons } from './components/loading-skeleton';
 import { NoActiveLookoutsEmpty, NoArchivedLookoutsEmpty } from './components/empty-state';
 import { TotalLimitWarning, DailyLimitWarning } from './components/warning-card';
 import { LookoutCard } from './components/lookout-card';
-import { ProUpgradeScreen } from './components/pro-upgrade-screen';
 import { LookoutForm } from './components/lookout-form';
 import { useLookoutForm } from './hooks/use-lookout-form';
 import { getRandomExamples, LOOKOUT_LIMITS, timezoneOptions } from './constants';
@@ -158,8 +157,6 @@ export default function LookoutPage() {
   // Form logic hook
   const formHook = useLookoutForm(detectedTimezone);
 
-  // All users (including guests) can access Lookouts - no authentication required
-
   // Handle error display
   React.useEffect(() => {
     if (error) {
@@ -236,8 +233,6 @@ export default function LookoutPage() {
       </>
     );
   }
-
-  // All users have Pro access - no upgrade screen needed
 
   return (
     <>

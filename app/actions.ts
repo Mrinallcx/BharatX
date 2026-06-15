@@ -6,6 +6,7 @@ import { serverEnv } from '@/env/server';
 import { SearchGroupId } from '@/lib/utils';
 import { generateObject, UIMessage, generateText } from 'ai';
 import type { ModelMessage } from 'ai';
+import { GroqProviderOptions } from '@ai-sdk/groq';
 import { z } from 'zod';
 import { getUser } from '@/lib/auth-utils';
 import { bharatX } from '@/ai/providers';
@@ -32,6 +33,7 @@ import {
   updateLookout,
   updateLookoutStatus,
   deleteLookout,
+  ensureGuestLookoutUser,
 } from '@/lib/db/queries';
 import { getDiscountConfig } from '@/lib/discount';
 import { get } from '@vercel/edge-config';
@@ -128,11 +130,24 @@ export async function suggestQuestions(history: any[]) {
 - Each question must be grammatically complete
 - Each question must end with a question mark
 - Questions must be diverse and not redundant
-- Do not include instructions or meta-commentary in the questions`,
+- Do not include instructions or meta-commentary in the questions
+
+### Output format (strict):
+- Return ONLY a JSON object: {"questions":["...","...","..."]}
+- Do NOT include JSON Schema fields such as $schema, type, properties, required, or additionalProperties`,
     messages: history,
     schema: z.object({
       questions: z.array(z.string().max(150)).describe('The generated questions based on the message history.').min(3).max(3),
     }),
+    providerOptions: {
+      groq: {
+        reasoningEffort: 'none',
+        // qwen/qwen3-32b on Groq does not support response_format `json_schema`.
+        // Disabling structuredOutputs makes the SDK use `json_object` mode instead.
+        structuredOutputs: false,
+        parallelToolCalls: false,
+      } satisfies GroqProviderOptions,
+    },
     experimental_repairText: async ({ text }) => {
       return jsonrepair(text);
     },
@@ -277,6 +292,15 @@ const groupTools = {
   connectors: ['connectors_search', 'datetime'] as const,
   prediction: ['prediction_search', 'datetime'] as const,
   'multi-agent': ['xai_web_search', 'xai_x_search'] as const,
+  'agent-thor': [
+    'web_search',
+    'datetime',
+    'stock_chart',
+    'currency_converter',
+    'coin_data',
+    'coin_ohlc',
+    'coin_data_by_contract',
+  ] as const,
   // Add legacy mapping for backward compatibility
   buddy: ['datetime', 'search_memories', 'add_memory'] as const,
 } as const;
@@ -1559,6 +1583,51 @@ Answer requirements:
 - Do not fabricate facts, sources, quotes, dates, or consensus.
 - If something cannot be verified well enough, say so plainly.
 - Make sure the final answer actually reflects the evidence you found.`,
+
+  'agent-thor': `
+You are Agent Thor, BharatX's high-agency web research agent powered by Kimi.
+
+You are a rigorous research analyst. Investigate using \`web_search\` plus financial tools when relevant. Produce a clear, grounded final written analysis. You do NOT have access to X/Twitter — never claim to search social posts.
+
+**Today's Date:** ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', weekday: 'short' })}
+
+Research behavior:
+- ⚠️ Always run \`web_search\` before writing — never answer from memory alone.
+- Use 1–2 focused web searches (each with 3–5 queries), then move to your written analysis.
+- Do NOT repeat the same search or chart tool call.
+- Cross-check important claims across sources when possible.
+
+Tool limits (strict):
+- \`web_search\`: max 2 calls per request.
+- \`stock_chart\`: at most once per ticker.
+- \`coin_data\`: at most once per coin.
+- \`coin_ohlc\`: at most once per coin (pick one timeframe, e.g. 365 days).
+- Never call the same financial chart tool twice.
+
+Domain handling:
+- **Stocks:** \`stock_chart\` once, then \`web_search\`, then write analysis.
+- **Crypto:** \`coin_data\` once + \`coin_ohlc\` once, then \`web_search\`, then write analysis.
+- **General:** \`web_search\` then synthesize findings.
+
+Answer requirements:
+- You MUST always end with a complete written analysis — never stop after tool calls alone.
+- NEVER output planning, tool-limit discussions, or meta-commentary in the user-visible response.
+- The ONLY user-visible text must be the final formatted report starting with ## Executive Summary (or equivalent heading).
+- NEVER end with a planning sentence (e.g. "Now let me...", "Let me search...", "I'll check..."). If tools are done, write the full analysis immediately.
+- For crypto: call \`coin_data\` AND \`coin_ohlc\` (365 days), then \`web_search\`, before writing your verdict.
+- Begin with a concise summary, then structured sections (## / ### headings, tables where helpful).
+
+Mandatory inline source links (critical):
+- Every factual sentence MUST include a markdown link immediately after the claim: [Source Title](https://full-url).
+- \`coin_data\` / \`coin_ohlc\` prices, market cap, returns, volume → cite the CoinGecko URL from the tool result (e.g. [CoinGecko – Ethereum](https://www.coingecko.com/en/coins/ethereum)).
+- \`stock_chart\` earnings, valuation, price history → cite Yahoo Finance or the URL returned by the tool.
+- News, L2 growth, staking trends, ETF flows, regulation, competition, macro → cite the exact URL from \`web_search\` results.
+- Never write unsourced paragraphs about fundamentals or news. No link = omit the claim or mark it "unverified".
+- Use descriptive link titles (site or article name), not raw URLs.
+
+- Include uncertainty when evidence is incomplete.
+- Do not fabricate facts, sources, quotes, or dates.
+- Maintain the language of the user's message.`,
 };
 
 export async function getGroupConfig(groupId: LegacyGroupId = 'web') {
@@ -2126,16 +2195,11 @@ function calculateOnceNextRun(time: string, timezone: string, date?: string): Da
   return targetDate;
 }
 
-const FALLBACK_LOOKOUT_USER = {
-  id: 'dev-user',
-  email: null,
-  name: 'Dev User',
-  isProUser: true,
-};
-
 async function getLookoutUser() {
   const user = await getCurrentUser();
-  return user ?? FALLBACK_LOOKOUT_USER;
+  if (user) return user;
+
+  return ensureGuestLookoutUser();
 }
 
 export async function createScheduledLookout({

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { Drawer, DrawerContent } from '@/components/ui/drawer';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
@@ -254,22 +254,25 @@ const MarketsSheet: React.FC<{
 
   const SheetWrapper = isMobile ? Drawer : Sheet;
   const SheetContentWrapper = isMobile ? DrawerContent : SheetContent;
+  const HeaderWrapper = isMobile ? DrawerHeader : SheetHeader;
+  const TitleWrapper = isMobile ? DrawerTitle : SheetTitle;
+  const DescriptionWrapper = isMobile ? DrawerDescription : SheetDescription;
 
   return (
     <SheetWrapper open={open} onOpenChange={onOpenChange}>
       <SheetContentWrapper className={cn(isMobile ? 'h-[85vh]' : 'w-[580px] sm:max-w-[580px]', 'p-0')}>
         <div className="flex flex-col h-full bg-background">
-          <div className="px-5 py-4 border-b border-border">
+          <HeaderWrapper className="px-5 py-4 border-b border-border text-left">
             <div className="flex items-center gap-2 mb-0.5">
               <div className="p-1.5 rounded-md bg-muted">
                 <Icons.TrendUp className="h-3.5 w-3.5 text-foreground" />
               </div>
-              <h2 className="text-base font-semibold text-foreground">Prediction Markets</h2>
+              <TitleWrapper className="text-base font-semibold text-foreground">Prediction Markets</TitleWrapper>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <DescriptionWrapper className="text-xs text-muted-foreground">
               {markets.length} markets for &quot;{query}&quot;
-            </p>
-          </div>
+            </DescriptionWrapper>
+          </HeaderWrapper>
 
           <div className="flex-1 overflow-y-auto">
             {markets.map((market, index) => (
@@ -382,11 +385,12 @@ const PredictionSearch: React.FC<{
   return (
     <div className="w-full my-3">
       <div className="border border-border rounded-lg overflow-hidden bg-card">
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-accent/50 transition-colors"
-        >
-          <div className="flex items-center gap-2.5">
+        <div className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-accent/50 transition-colors group">
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
+          >
             <div className="p-1.5 rounded-md bg-muted">
               <Icons.TrendUp className="h-3.5 w-3.5 text-foreground" />
             </div>
@@ -394,28 +398,33 @@ const PredictionSearch: React.FC<{
             <span className="text-[11px] text-muted-foreground">
               {totalResults} {totalResults === 1 ? 'market' : 'markets'}
             </span>
-          </div>
-          <div className="flex items-center gap-2">
+          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
             {totalResults > 0 && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSheetOpen(true);
-                }}
+                type="button"
+                onClick={() => setSheetOpen(true)}
                 className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors px-2 py-1 hover:bg-accent rounded-md flex items-center gap-1"
               >
                 View all
                 <Icons.ArrowUpRight className="w-3 h-3" />
               </button>
             )}
-            <Icons.ChevronDown
-              className={cn(
-                'h-3.5 w-3.5 text-muted-foreground transition-transform duration-200',
-                isExpanded && 'rotate-180',
-              )}
-            />
+            <button
+              type="button"
+              onClick={() => setIsExpanded(!isExpanded)}
+              aria-label={isExpanded ? 'Collapse prediction markets' : 'Expand prediction markets'}
+              className="p-0.5 rounded hover:bg-accent/40 transition-colors"
+            >
+              <Icons.ChevronDown
+                className={cn(
+                  'h-3.5 w-3.5 text-muted-foreground transition-transform duration-200',
+                  isExpanded && 'rotate-180',
+                )}
+              />
+            </button>
           </div>
-        </button>
+        </div>
 
         {isExpanded && (
           <div className="border-t border-border">

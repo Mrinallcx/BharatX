@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils';
 import {
   NewTwitterIcon,
   AppleStocksIcon,
+  Bitcoin02Icon,
+  MicroscopeIcon,
   ArrowRight01Icon,
   Cancel01Icon,
 } from '@hugeicons/core-free-icons';
@@ -25,17 +27,17 @@ interface Category {
 }
 
 const categories: Category[] = [
-  // {
-  //   id: 'crypto',
-  //   name: 'Crypto',
-  //   icon: Bitcoin02Icon,
-  //   examples: [
-  //     { text: 'What is the current price of Bitcoin?', group: 'crypto' },
-  //     { text: 'Show me Ethereum OHLC chart for the last 30 days', group: 'crypto' },
-  //     { text: 'Top trending cryptocurrencies right now', group: 'crypto' },
-  //     { text: 'Compare Solana vs Ethereum market cap', group: 'crypto' },
-  //   ],
-  // },
+  {
+    id: 'crypto',
+    name: 'Crypto',
+    icon: Bitcoin02Icon,
+    examples: [
+      { text: 'What is the current price of Bitcoin?', group: 'crypto' },
+      { text: 'Show me Ethereum OHLC chart for the last 30 days', group: 'crypto' },
+      { text: 'Top trending cryptocurrencies right now', group: 'crypto' },
+      { text: 'Compare Solana vs Ethereum market cap', group: 'crypto' },
+    ],
+  },
   {
     id: 'stocks',
     name: 'Stocks',
@@ -56,6 +58,26 @@ const categories: Category[] = [
       { text: 'Latest crypto market sentiment on X', group: 'x' },
       { text: 'Breaking news about Bitcoin regulation', group: 'x' },
       { text: 'What are traders saying about the market?', group: 'x' },
+    ],
+  },
+  {
+    id: 'agent-thor',
+    name: 'Agent Thor',
+    icon: MicroscopeIcon,
+    badge: 'Deep research',
+    examples: [
+      {
+        text: 'Full Ethereum investment brief: live price, 1-year OHLC chart, L2 growth, staking yields, regulatory risks, and a clear buy/hold/sell verdict with cited sources',
+        group: 'agent-thor',
+      },
+      {
+        text: 'Research NVIDIA end-to-end: stock chart, valuation vs AMD, AI datacenter revenue outlook, and latest analyst revisions — structured report with links',
+        group: 'agent-thor',
+      },
+      {
+        text: 'Is Bitcoin still a macro hedge in 2026? Compare BTC vs gold and the S&P 500, ETF flows, and Fed policy impact with a sourced investment view',
+        group: 'agent-thor',
+      },
     ],
   },
   // Prediction mode hidden from main UI — re-enable with search mode
@@ -210,7 +232,7 @@ export const ExampleCategories = memo(({ onSelectExample, className }: ExampleCa
                     'text-muted-foreground hover:text-foreground hover:bg-accent',
                   )}
                 >
-                  <span className="line-clamp-1">{example.text}</span>
+                  <span className="line-clamp-2">{example.text}</span>
                   <HugeiconsIcon
                     icon={ArrowRight01Icon}
                     size={12}

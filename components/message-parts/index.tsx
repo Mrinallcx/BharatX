@@ -34,6 +34,81 @@ function isXaiMultiAgentToolPart(part: ChatMessage['parts'][number]) {
 function getXaiMultiAgentToolLabel(partType: XaiMultiAgentToolPart['type']) {
   return partType === 'tool-xai_x_search' ? 'X Search' : 'Web Search';
 }
+
+function isKimiWebSearchToolPart(part: ChatMessage['parts'][number]) {
+  return part.type === 'tool-kimi_web_search';
+}
+
+type XSearchToolPart = Extract<ChatMessage['parts'][number], { type: 'tool-x_search' }>;
+
+function isXSearchToolPart(part: ChatMessage['parts'][number]): part is XSearchToolPart {
+  return part.type === 'tool-x_search';
+}
+
+function mergeXSearchToolOutputs(parts: XSearchToolPart[]) {
+  const outputs = parts.map((part) => part.output).filter((output): output is NonNullable<typeof output> => Boolean(output));
+  return {
+    searches: outputs.flatMap((output) => output.searches ?? []),
+    dateRange: outputs.find((output) => output.dateRange)?.dateRange ?? '',
+    handles: Array.from(new Set(outputs.flatMap((output) => output.handles ?? []))),
+  };
+}
+
+function mergeXSearchToolInputs(parts: XSearchToolPart[]) {
+  const queries = parts.flatMap((part) => {
+    const value = part.input?.queries;
+    if (Array.isArray(value)) return value.filter((q): q is string => typeof q === 'string');
+    return typeof value === 'string' ? [value] : [];
+  });
+  const maxResults = parts.flatMap((part) => {
+    const value = part.input && 'maxResults' in part.input ? part.input.maxResults : undefined;
+    if (Array.isArray(value)) return value.filter((n): n is number => typeof n === 'number');
+    return typeof value === 'number' ? [value] : [];
+  });
+  return { queries, maxResults };
+}
+
+function isFirstAgentThorToolPart(
+  parts: ChatMessage['parts'][number][],
+  partIndex: number,
+  toolType: string,
+  agentThorMode?: boolean,
+) {
+  if (!agentThorMode) return true;
+  const firstIdx = parts.findIndex((p) => {
+    if (p.type !== toolType || !('state' in p)) return false;
+    return p.state === 'output-available' || p.state === 'input-available' || p.state === 'input-streaming';
+  });
+  return partIndex === firstIdx;
+}
+
+/** Agent Thor sometimes leaks planning / tool meta into visible text — hide it. */
+function isAgentThorMetaText(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+
+  // Real reports use markdown headings
+  if (/^#{1,3}\s/m.test(trimmed)) return false;
+  if (trimmed.length > 600 && trimmed.includes('##')) return false;
+
+  const metaPatterns = [
+    /\bNow let me\b/i,
+    /\bLet me (search|get|execute|proceed|make|call|check|write|output|format)\b/i,
+    /kimi_web_search/i,
+    /`stock_chart`/i,
+    /`coin_data`/i,
+    /`coin_ohlc`/i,
+    /\btool limit/i,
+    /\bI (will|must|need to|should) (run|call|use|execute)\b/i,
+    /\b(Final plan|Proceeding|Wait,|Actually,|One important note)\b/i,
+    /\btool call history\b/i,
+    /\bSince I am (planning|simulating|reasoning)\b/i,
+    /\bLet me do that\b/i,
+    /\bI'll wait for the result\b/i,
+  ];
+
+  return metaPatterns.some((pattern) => pattern.test(trimmed));
+}
 import { UseChatHelpers } from '@ai-sdk/react';
 import { BharatXLogoHeader } from '@/components/scira-logo-header';
 import Image from 'next/image';
@@ -247,11 +322,19 @@ export const MessagePartRenderer = memo<MessagePartRendererProps>(
         return null;
       }
 
+      // Agent Thor: hide planning / tool meta that leaked into text parts
+      if (message?.metadata?.agentThorMode && isAgentThorMetaText(part.text)) {
+        return null;
+      }
+
       return (
         <div key={`${messageIndex}-${partIndex}-text`} className="mt-2">
           <div>
             <ChatTextHighlighter onHighlight={onHighlight} removeHighlightOnClick={true}>
-              <MarkdownRenderer content={part.text} />
+              <MarkdownRenderer
+                content={part.text}
+                isStreaming={status === 'streaming' || status === 'submitted'}
+              />
             </ChatTextHighlighter>
           </div>
 
@@ -446,6 +529,32 @@ export const MessagePartRenderer = memo<MessagePartRendererProps>(
 
     // Handle reasoning parts
     if (part.type === 'reasoning') {
+      // Agent Thor: never show the full reasoning wall — compact badge only
+      if (message?.metadata?.agentThorMode) {
+        const firstReasoningIdx = parts.findIndex((p) => p.type === 'reasoning');
+        if (partIndex !== firstReasoningIdx) return null;
+
+        const hasVisibleAnalysis = parts.some(
+          (p) =>
+            p.type === 'text' &&
+            'text' in p &&
+            typeof p.text === 'string' &&
+            !isAgentThorMetaText(p.text),
+        );
+        const isStillThinking = status === 'streaming' || status === 'submitted';
+
+        return (
+          <div key={`${messageIndex}-${partIndex}-agent-thor-thinking`} className="my-1.5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border/60 px-2.5 py-1 text-[11px] bg-background/70 text-muted-foreground">
+              <Globe className="h-3 w-3 shrink-0" />
+              <span className="font-medium">
+                {hasVisibleAnalysis && !isStillThinking ? 'Research complete' : 'Agent Thor is thinking…'}
+              </span>
+            </div>
+          </div>
+        );
+      }
+
       // If previous part is also reasoning, skip rendering to avoid duplicate sections
       const prevPart = parts[partIndex - 1];
       if (prevPart && prevPart.type === 'reasoning') {
@@ -695,6 +804,9 @@ export const MessagePartRenderer = memo<MessagePartRendererProps>(
             break;
 
           case 'tool-stock_chart':
+            if (!isFirstAgentThorToolPart(parts, partIndex, 'tool-stock_chart', message?.metadata?.agentThorMode)) {
+              return null;
+            }
             switch (part.state) {
               case 'input-streaming':
                 return (
@@ -1225,48 +1337,74 @@ export const MessagePartRenderer = memo<MessagePartRendererProps>(
             }
             break;
 
-          case 'tool-x_search':
-            switch (part.state) {
-              case 'input-streaming':
-                return (
-                  <div key={`${messageIndex}-${partIndex}-tool`} className="text-sm text-neutral-500">
-                    Preparing X search...
-                  </div>
-                );
-              case 'input-available':
-                return (
-                  <SearchLoadingState
-                    key={`${messageIndex}-${partIndex}-tool`}
-                    icon={XLogoIcon}
-                    text="Searching X (Twitter)..."
-                    color="gray"
-                  />
-                );
-              case 'output-available':
-                return (
-                  <XSearch
-                    key={`${messageIndex}-${partIndex}-tool`}
-                    result={{
-                      ...part.output,
-                      searches: part.output.searches?.map((search: any) => ({
-                        ...search,
-                        query: search.query || '',
-                        sources: search.sources?.filter((s: any): s is NonNullable<typeof s> => s !== null) || [],
-                        citations:
-                          search.citations?.map((citation: any) => ({
-                            ...citation,
-                            title: citation.title || ('url' in citation ? citation.url : citation.id) || 'Citation',
-                            url: 'url' in citation ? citation.url : citation.id,
-                          })) || [],
-                      })) || [],
-                      dateRange: part.output.dateRange || '',
-                      handles: part.output.handles || [],
-                    }}
-                    args={part.input ? part.input : {}}
-                  />
-                );
+          case 'tool-x_search': {
+            const xSearchParts = parts.filter(isXSearchToolPart);
+            const firstXSearchIndex = parts.findIndex(isXSearchToolPart);
+
+            if (partIndex !== firstXSearchIndex) {
+              return null;
             }
-            break;
+
+            const completedParts = xSearchParts.filter(
+              (toolPart) => toolPart.state === 'output-available' && toolPart.output,
+            );
+            const hasInProgress = xSearchParts.some(
+              (toolPart) => toolPart.state === 'input-streaming' || toolPart.state === 'input-available',
+            );
+            const hasError = xSearchParts.some((toolPart) => toolPart.state === 'output-error');
+            const errorText = xSearchParts.find((toolPart) => toolPart.state === 'output-error')?.errorText;
+
+            if (completedParts.length > 0) {
+              const mergedOutput = mergeXSearchToolOutputs(completedParts);
+              const mergedInput = mergeXSearchToolInputs(completedParts);
+
+              return (
+                <XSearch
+                  key={`${messageIndex}-${partIndex}-tool`}
+                  result={{
+                    ...mergedOutput,
+                    searches: mergedOutput.searches.map((search: any) => ({
+                      ...search,
+                      query: search.query || '',
+                      sources: search.sources?.filter((s: any): s is NonNullable<typeof s> => s !== null) || [],
+                      citations:
+                        search.citations?.map((citation: any) => ({
+                          ...citation,
+                          title: citation.title || ('url' in citation ? citation.url : citation.id) || 'Citation',
+                          url: 'url' in citation ? citation.url : citation.id,
+                        })) || [],
+                    })),
+                  }}
+                  args={mergedInput}
+                  isLoadingMore={hasInProgress}
+                />
+              );
+            }
+
+            if (hasInProgress) {
+              return (
+                <SearchLoadingState
+                  key={`${messageIndex}-${partIndex}-tool`}
+                  icon={XLogoIcon}
+                  text="Searching X (Twitter)..."
+                  color="gray"
+                />
+              );
+            }
+
+            if (hasError) {
+              return (
+                <div
+                  key={`${messageIndex}-${partIndex}-tool`}
+                  className="my-2 rounded-lg border border-red-500/20 bg-red-50/50 px-3 py-2 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-300"
+                >
+                  X search failed{errorText ? `: ${errorText}` : '.'}
+                </div>
+              );
+            }
+
+            return null;
+          }
 
           case 'tool-youtube_search':
             switch (part.state) {
@@ -1610,6 +1748,9 @@ export const MessagePartRenderer = memo<MessagePartRendererProps>(
             break;
 
           case 'tool-retrieve':
+            if (message?.metadata?.agentThorMode) {
+              return null;
+            }
             switch (part.state) {
               case 'input-streaming':
                 return (
@@ -1882,6 +2023,9 @@ export const MessagePartRenderer = memo<MessagePartRendererProps>(
             break;
 
           case 'tool-coin_ohlc':
+            if (!isFirstAgentThorToolPart(parts, partIndex, 'tool-coin_ohlc', message?.metadata?.agentThorMode)) {
+              return null;
+            }
             switch (part.state) {
               case 'input-streaming':
                 return (
@@ -1906,6 +2050,9 @@ export const MessagePartRenderer = memo<MessagePartRendererProps>(
             break;
 
           case 'tool-coin_data':
+            if (!isFirstAgentThorToolPart(parts, partIndex, 'tool-coin_data', message?.metadata?.agentThorMode)) {
+              return null;
+            }
             switch (part.state) {
               case 'input-streaming':
                 return (
@@ -1930,6 +2077,16 @@ export const MessagePartRenderer = memo<MessagePartRendererProps>(
             break;
 
           case 'tool-coin_data_by_contract':
+            if (
+              !isFirstAgentThorToolPart(
+                parts,
+                partIndex,
+                'tool-coin_data_by_contract',
+                message?.metadata?.agentThorMode,
+              )
+            ) {
+              return null;
+            }
             switch (part.state) {
               case 'input-streaming':
                 return (
@@ -1952,6 +2109,53 @@ export const MessagePartRenderer = memo<MessagePartRendererProps>(
                 );
             }
             break;
+
+          case 'tool-kimi_web_search': {
+            const mergedKimiSearchParts = parts.filter(isKimiWebSearchToolPart);
+            const mergedFirstKimiSearchIndex = parts.findIndex(isKimiWebSearchToolPart);
+
+            if (partIndex !== mergedFirstKimiSearchIndex) {
+              return null;
+            }
+
+            const hasError = mergedKimiSearchParts.some(
+              (toolPart) => 'state' in toolPart && toolPart.state === 'output-error',
+            );
+            const errorText = mergedKimiSearchParts.find(
+              (toolPart) => 'state' in toolPart && toolPart.state === 'output-error',
+            );
+            const errorMessage =
+              errorText && 'errorText' in errorText ? errorText.errorText : undefined;
+            const searchCount = mergedKimiSearchParts.length;
+            const activityLabel = hasError
+              ? searchCount > 1
+                ? `${searchCount} Web Searches`
+                : 'Web Search'
+              : searchCount > 1
+                ? `Running ${searchCount} Web Searches`
+                : 'Running Web Search';
+
+            return (
+              <div key={`${messageIndex}-${partIndex}-tool`} className="my-1.5">
+                <div
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] bg-background/70',
+                    hasError
+                      ? 'border-red-500/20 text-red-600 dark:text-red-300'
+                      : 'border-border/60 text-muted-foreground',
+                  )}
+                >
+                  <Globe className="h-3 w-3 shrink-0" />
+                  <span className="font-medium">{activityLabel}</span>
+                  {hasError && errorMessage ? (
+                    <span className="max-w-[200px] truncate text-[11px]" title={errorMessage}>
+                      {errorMessage}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            );
+          }
 
           case 'tool-xai_web_search':
           case 'tool-xai_x_search': {
