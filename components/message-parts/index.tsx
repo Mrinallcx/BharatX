@@ -178,6 +178,7 @@ const NearbySearchMapView = dynamic(() => import('@/components/nearby-search-map
 const InteractiveStockChart = dynamic(() => import('@/components/interactive-stock-chart'), { ssr: false });
 const CryptoChart = dynamic(() => import('@/components/crypto-charts').then(m => ({ default: m.CryptoChart })), { ssr: false });
 const TechnicalAnalysis = dynamic(() => import('@/components/technical-analysis').then(m => ({ default: m.TechnicalAnalysis })), { ssr: false });
+const StockFinder = dynamic(() => import('@/components/stock-finder').then(m => ({ default: m.StockFinder })), { ssr: false });
 const CryptoTickers = dynamic(() => import('@/components/crypto-charts').then(m => ({ default: m.CryptoTickers })), { ssr: false });
 
 // Simple loader component for stock chart - no useEffect needed
@@ -2075,6 +2076,36 @@ export const MessagePartRenderer = memo<MessagePartRendererProps>(
                     key={`${messageIndex}-${partIndex}-tool`}
                     errorText={part.errorText || 'Technical analysis failed'}
                     toolName="Technical Analysis"
+                  />
+                );
+            }
+            break;
+
+          case 'tool-stock_finder':
+            switch (part.state) {
+              case 'input-streaming':
+                return (
+                  <div key={`${messageIndex}-${partIndex}-tool`} className="text-sm text-neutral-500">
+                    Preparing stock screen...
+                  </div>
+                );
+              case 'input-available':
+                return (
+                  <SearchLoadingState
+                    key={`${messageIndex}-${partIndex}-tool`}
+                    icon={TrendingUpIcon}
+                    text="Screening and ranking stocks..."
+                    color="violet"
+                  />
+                );
+              case 'output-available':
+                return <StockFinder result={part.output} key={`${messageIndex}-${partIndex}-tool`} />;
+              case 'output-error':
+                return (
+                  <ToolErrorDisplay
+                    key={`${messageIndex}-${partIndex}-tool`}
+                    errorText={part.errorText || 'Stock screening failed'}
+                    toolName="Stock Finder"
                   />
                 );
             }

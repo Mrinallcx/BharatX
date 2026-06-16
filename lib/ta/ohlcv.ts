@@ -76,17 +76,62 @@ export function cryptoSymbolToBinance(input: string): string {
   return `${base || 'BTC'}USDT`;
 }
 
+/**
+ * Binance market-data hosts in priority order. `data-api.binance.vision` is Binance's
+ * public market-data domain that is NOT geo-restricted, so it works from cloud/data-center
+ * IPs (e.g. Vercel) where `api.binance.com` returns HTTP 451. The rest are fallbacks.
+ */
+const BINANCE_HOSTS = [
+  'https://data-api.binance.vision',
+  'https://api.binance.com',
+  'https://api-gcp.binance.com',
+  'https://api1.binance.com',
+  'https://api2.binance.com',
+];
+
+async function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store', signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Fetch raw klines, trying each host until one succeeds. Returns null on hard failure. */
+async function fetchBinanceKlines(pair: string, interval: string, limit: number): Promise<unknown[] | null> {
+  const path = `/api/v3/klines?symbol=${encodeURIComponent(pair)}&interval=${interval}&limit=${Math.min(limit, 1000)}`;
+  let lastStatus = 0;
+
+  for (const host of BINANCE_HOSTS) {
+    try {
+      const response = await fetchWithTimeout(`${host}${path}`);
+      if (response.ok) {
+        const rows = (await response.json()) as unknown[];
+        if (Array.isArray(rows) && rows.length > 0) return rows;
+        return null; // valid response but no data (e.g. unknown symbol)
+      }
+      lastStatus = response.status;
+      // 400/404 = invalid symbol; every host will agree, so stop early.
+      if (response.status === 400 || response.status === 404) return null;
+      // 451/403 (geo-block), 429 (rate limit), 5xx -> try the next host.
+    } catch (error) {
+      console.warn(`[ta/ohlcv] Binance host ${host} failed:`, (error as Error).message);
+    }
+  }
+
+  console.error(`[ta/ohlcv] all Binance hosts failed for ${pair} (last status ${lastStatus})`);
+  return null;
+}
+
 async function fetchCryptoOhlcv(symbol: string, timeframe: Timeframe, limit: number): Promise<OhlcvResult | null> {
   const pair = cryptoSymbolToBinance(symbol);
   const interval = BINANCE_INTERVAL[timeframe];
-  const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(pair)}&interval=${interval}&limit=${Math.min(limit, 1000)}`;
 
   try {
-    const response = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
-    if (!response.ok) return null;
-
-    const rows = (await response.json()) as unknown[];
-    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const rows = await fetchBinanceKlines(pair, interval, limit);
+    if (!rows) return null;
 
     const candles: Candle[] = rows.map((row) => {
       const [openTime, open, high, low, close, volume] = row as [number, string, string, string, string, string];
@@ -130,15 +175,33 @@ function periodStart(timeframe: Timeframe, limit: number): Date {
   }
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Yahoo rate-limits shared cloud IPs (HTTP 429); retry a couple of times with backoff. */
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 350): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (i < attempts - 1) await sleep(baseDelayMs * (i + 1));
+    }
+  }
+  throw lastError;
+}
+
 async function fetchStockOhlcv(symbol: string, timeframe: Timeframe, limit: number): Promise<OhlcvResult | null> {
   const ticker = symbol.trim().toUpperCase();
   const interval = YAHOO_INTERVAL[timeframe];
 
   try {
-    const result = await yf.chart(ticker, {
-      period1: periodStart(timeframe, limit),
-      interval,
-    });
+    const result = await withRetry(() =>
+      yf.chart(ticker, {
+        period1: periodStart(timeframe, limit),
+        interval,
+      }),
+    );
 
     const quotes = result?.quotes ?? [];
     const candles: Candle[] = quotes

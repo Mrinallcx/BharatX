@@ -24,3 +24,4 @@ export { createMemoryTools, type SearchMemoryTool, type AddMemoryTool } from './
 export { codeContextTool } from './code-context';
 export { predictionSearchTool } from './prediction-search';
 export { technicalAnalysisTool } from './technical-analysis';
+export { stockFinderTool } from './stock-finder';

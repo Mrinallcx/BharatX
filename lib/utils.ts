@@ -15,6 +15,7 @@ import {
   ConnectIcon,
   CodeCircleIcon,
   Chart03Icon,
+  Analytics01Icon,
 } from '@hugeicons/core-free-icons';
 
 export function cn(...inputs: ClassValue[]) {
@@ -37,6 +38,7 @@ export type SearchGroupId =
   | 'connectors'
   | 'prediction'
   | 'technical'
+  | 'stock-finder'
   | 'multi-agent'
   | 'agent-thor';
 
@@ -177,6 +179,13 @@ export function getSearchGroups(searchProvider: SearchProvider = 'parallel') {
       name: 'Technical Analysis',
       description: 'Indicator-based analysis for stocks & crypto. Type / to pick indicators',
       icon: Chart03Icon,
+      show: true,
+    },
+    {
+      id: 'stock-finder' as const,
+      name: 'Stock Finder',
+      description: 'Discover & rank US and India stocks by your criteria',
+      icon: Analytics01Icon,
       show: true,
     },
   ] as const;

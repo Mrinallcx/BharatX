@@ -117,6 +117,7 @@ import {
   codeContextTool,
   predictionSearchTool,
   technicalAnalysisTool,
+  stockFinderTool,
 } from '@/lib/tools';
 import { GroqProviderOptions } from '@ai-sdk/groq';
 import { markdownJoinerTransform } from '@/lib/parser';
@@ -308,6 +309,7 @@ export async function POST(req: Request) {
       const shouldUseXaiMultiAgent = group === 'multi-agent' && !isSearchGroupComingSoon('multi-agent');
       const shouldUseAgentThor = group === 'agent-thor' && !isSearchGroupComingSoon('agent-thor');
       const shouldUseTechnicalAnalysis = group === 'technical' && !isSearchGroupComingSoon('technical');
+      const shouldUseStockFinder = group === 'stock-finder' && !isSearchGroupComingSoon('stock-finder');
 
       const taIndicators: string[] = Array.isArray(technicalAnalysis?.indicators) ? technicalAnalysis.indicators : [];
       const taTimeframe = technicalAnalysis?.timeframe ?? '1d';
@@ -316,8 +318,9 @@ export async function POST(req: Request) {
       const effectiveModelId = shouldUseAgentThor ? 'bharatx-kimi-k2-6-think' : model;
 
       const setupTime = (Date.now() - requestStartTime) / 1000;
+      // Forcing a tool is incompatible with Kimi thinking; fall back to the non-thinking flow model.
       const useMoonshotToolFlow =
-        shouldUseTechnicalAnalysis && isKimiThinkingModel(model);
+        (shouldUseTechnicalAnalysis || shouldUseStockFinder) && isKimiThinkingModel(model);
 
       console.log(
         `🚀 Time to streamText: ${setupTime.toFixed(2)}s`,
@@ -327,7 +330,9 @@ export async function POST(req: Request) {
             ? '(agent-thor mode)'
             : shouldUseTechnicalAnalysis
               ? '(technical analysis mode)'
-              : '',
+              : shouldUseStockFinder
+                ? '(stock finder mode)'
+                : '',
       );
 
       const streamStartTime = Date.now();
@@ -498,6 +503,18 @@ export async function POST(req: Request) {
             return { toolChoice: 'none' as const, activeTools: [] };
           }
 
+          // Stock Finder: force the screening tool once, then switch to interpretation only.
+          if (shouldUseStockFinder) {
+            const hasRunFinder = steps.some((step) => step.toolCalls.some((tc) => tc.toolName === 'stock_finder'));
+            if (!hasRunFinder) {
+              return {
+                toolChoice: { type: 'tool' as const, toolName: 'stock_finder' },
+                activeTools: ['stock_finder'],
+              };
+            }
+            return { toolChoice: 'none' as const, activeTools: [] };
+          }
+
           // Agent Thor: enforce tool order (charts → search → synthesis)
           if (shouldUseAgentThor) {
             const usedTools = new Set<string>();
@@ -653,6 +670,7 @@ export async function POST(req: Request) {
             code_context: codeContextTool,
             prediction_search: predictionSearchTool(dataStream),
             technical_analysis: technicalAnalysisTool({ indicators: taIndicators, timeframe: taTimeframe }),
+            stock_finder: stockFinderTool,
           };
 
           const toolsWithXai = shouldUseXaiMultiAgent

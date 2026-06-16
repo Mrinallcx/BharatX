@@ -4,10 +4,9 @@ import React, { useState, useCallback, memo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import {
-  AppleStocksIcon,
-  Bitcoin02Icon,
   MicroscopeIcon,
   Chart03Icon,
+  Analytics01Icon,
   ArrowRight01Icon,
   Cancel01Icon,
 } from '@hugeicons/core-free-icons';
@@ -23,34 +22,12 @@ interface ExampleItem {
 interface Category {
   id: string;
   name: string;
-  icon: typeof Bitcoin02Icon;
+  icon: typeof Chart03Icon;
   examples: ExampleItem[];
   badge?: string;
 }
 
 const categories: Category[] = [
-  {
-    id: 'crypto',
-    name: 'Crypto',
-    icon: Bitcoin02Icon,
-    examples: [
-      { text: 'What is the current price of Bitcoin?', group: 'crypto' },
-      { text: 'Show me Ethereum OHLC chart for the last 30 days', group: 'crypto' },
-      { text: 'Top trending cryptocurrencies right now', group: 'crypto' },
-      { text: 'Compare Solana vs Ethereum market cap', group: 'crypto' },
-    ],
-  },
-  {
-    id: 'stocks',
-    name: 'Stocks',
-    icon: AppleStocksIcon,
-    examples: [
-      { text: 'NVIDIA stock price and recent performance', group: 'stocks' },
-      { text: 'Compare AAPL vs MSFT stock charts', group: 'stocks' },
-      { text: 'Latest Tesla earnings report analysis', group: 'stocks' },
-      { text: 'S&P 500 market trend today', group: 'stocks' },
-    ],
-  },
   {
     id: 'technical',
     name: 'Technical Analysis',
@@ -74,6 +51,16 @@ const categories: Category[] = [
         indicators: ['ichimoku', 'stoch', 'cci', 'obv', 'fib'],
         timeframe: '1w',
       },
+    ],
+  },
+  {
+    id: 'stock-finder',
+    name: 'Stock Finder',
+    icon: Analytics01Icon,
+    examples: [
+      { text: 'Find undervalued US large-cap stocks with a P/E under 20', group: 'stock-finder' },
+      { text: 'Show high-growth US technology stocks trading above their 200-day average', group: 'stock-finder' },
+      { text: 'Indian large caps with a dividend yield over 2%', group: 'stock-finder' },
     ],
   },
   {

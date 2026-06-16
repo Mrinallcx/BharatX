@@ -1,0 +1,33 @@
+// Curated stock universes used when a Yahoo predefined screen is unavailable
+// (India is not covered by Yahoo's predefined screens) or returns nothing (US fallback).
+
+/** Nifty 100 constituents as Yahoo `.NS` symbols. */
+export const INDIA_UNIVERSE: string[] = [
+  'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'BHARTIARTL.NS', 'ICICIBANK.NS',
+  'INFY.NS', 'SBIN.NS', 'HINDUNILVR.NS', 'BAJFINANCE.NS', 'ITC.NS',
+  'LICI.NS', 'LT.NS', 'HCLTECH.NS', 'KOTAKBANK.NS', 'SUNPHARMA.NS',
+  'MARUTI.NS', 'AXISBANK.NS', 'M&M.NS', 'NTPC.NS', 'ULTRACEMCO.NS',
+  'BAJAJFINSV.NS', 'TITAN.NS', 'ONGC.NS', 'ADANIENT.NS', 'ADANIPORTS.NS',
+  'WIPRO.NS', 'POWERGRID.NS', 'TATAMOTORS.NS', 'JSWSTEEL.NS', 'COALINDIA.NS',
+  'NESTLEIND.NS', 'BAJAJ-AUTO.NS', 'ASIANPAINT.NS', 'TATASTEEL.NS', 'HINDALCO.NS',
+  'TRENT.NS', 'DMART.NS', 'GRASIM.NS', 'SBILIFE.NS', 'HDFCLIFE.NS',
+  'TECHM.NS', 'INDUSINDBK.NS', 'CIPLA.NS', 'DRREDDY.NS', 'EICHERMOT.NS',
+  'BEL.NS', 'ADANIGREEN.NS', 'BRITANNIA.NS', 'APOLLOHOSP.NS', 'DIVISLAB.NS',
+  'PIDILITIND.NS', 'BANKBARODA.NS', 'GODREJCP.NS', 'TATACONSUM.NS', 'SHRIRAMFIN.NS',
+  'HEROMOTOCO.NS', 'VEDL.NS', 'AMBUJACEM.NS', 'DLF.NS', 'VBL.NS',
+  'CHOLAFIN.NS', 'SIEMENS.NS', 'ZOMATO.NS', 'PNB.NS', 'GAIL.NS',
+  'ADANIPOWER.NS', 'IOC.NS', 'HAL.NS', 'BPCL.NS', 'ICICIPRULI.NS',
+  'TVSMOTOR.NS', 'JINDALSTEL.NS', 'ABB.NS', 'BAJAJHLDNG.NS', 'HAVELLS.NS',
+  'TORNTPHARM.NS', 'LODHA.NS', 'CANBK.NS', 'NAUKRI.NS', 'INDIGO.NS',
+  'UNIONBANK.NS', 'MARICO.NS', 'DABUR.NS', 'ICICIGI.NS', 'SHREECEM.NS',
+  'COLPAL.NS', 'BOSCHLTD.NS', 'MOTHERSON.NS', 'INDUSTOWER.NS', 'BERGEPAINT.NS',
+  'SRF.NS', 'AUROPHARMA.NS', 'IDFCFIRSTB.NS', 'TIINDIA.NS', 'JSWENERGY.NS',
+  'GICRE.NS', 'CUMMINSIND.NS', 'POLYCAB.NS', 'NHPC.NS', 'TATAPOWER.NS',
+];
+
+/** Small large-cap fallback used only if a US predefined screen returns nothing. */
+export const US_FALLBACK_UNIVERSE: string[] = [
+  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'JPM', 'V',
+  'UNH', 'XOM', 'JNJ', 'WMT', 'MA', 'PG', 'HD', 'COST', 'ABBV', 'KO',
+  'PEP', 'MRK', 'BAC', 'AVGO', 'CVX', 'ADBE', 'CRM', 'MCD', 'CSCO', 'ACN',
+];
