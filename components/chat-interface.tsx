@@ -831,19 +831,28 @@ const ChatInterface = memo(
                 {/* Example categories - shown on empty state below the form */}
                 {messages.length === 0 && !chatState.hasSubmitted && (
                   <ExampleCategories
-                    onSelectExample={(text, group) => {
+                    onSelectExample={(text, group, options) => {
                       if (group) {
                         const nextGroup = group as SearchGroupId;
                         setSelectedGroup(nextGroup);
                         selectedGroupRef.current = nextGroup;
                       }
-                      lastSubmittedQueryRef.current = text.trim();
-                      setInput('');
-                      sendMessage({
-                        parts: [{ type: 'text', text }],
-                        role: 'user',
+                      if (options?.indicators?.length) {
+                        setTechnicalIndicators(options.indicators);
+                        technicalIndicatorsRef.current = options.indicators;
+                      }
+                      if (options?.timeframe) {
+                        setTechnicalTimeframe(options.timeframe);
+                        technicalTimeframeRef.current = options.timeframe;
+                      }
+                      setInput(text);
+                      requestAnimationFrame(() => {
+                        inputRef.current?.focus();
+                        if (inputRef.current) {
+                          inputRef.current.style.height = 'auto';
+                          inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
+                        }
                       });
-                      dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
                     }}
                     className="mt-4"
                   />

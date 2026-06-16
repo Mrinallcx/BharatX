@@ -4,10 +4,10 @@ import React, { useState, useCallback, memo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import {
-  NewTwitterIcon,
   AppleStocksIcon,
   Bitcoin02Icon,
   MicroscopeIcon,
+  Chart03Icon,
   ArrowRight01Icon,
   Cancel01Icon,
 } from '@hugeicons/core-free-icons';
@@ -16,12 +16,14 @@ import { HugeiconsIcon } from '@hugeicons/react';
 interface ExampleItem {
   text: string;
   group?: string;
+  indicators?: string[];
+  timeframe?: string;
 }
 
 interface Category {
   id: string;
   name: string;
-  icon: typeof NewTwitterIcon;
+  icon: typeof Bitcoin02Icon;
   examples: ExampleItem[];
   badge?: string;
 }
@@ -50,14 +52,28 @@ const categories: Category[] = [
     ],
   },
   {
-    id: 'x',
-    name: 'X Search',
-    icon: NewTwitterIcon,
+    id: 'technical',
+    name: 'Technical Analysis',
+    icon: Chart03Icon,
     examples: [
-      { text: 'What is Elon Musk posting about crypto?', group: 'x' },
-      { text: 'Latest crypto market sentiment on X', group: 'x' },
-      { text: 'Breaking news about Bitcoin regulation', group: 'x' },
-      { text: 'What are traders saying about the market?', group: 'x' },
+      {
+        text: 'Analyze Solana (SOL) on the daily chart. Compare SMA, WMA, and EMA — note crossovers and divergences. Use ADX for trend strength and PSAR for stop-and-reverse signals. Is price above or below each average? Give support, resistance, momentum read, and a buy/sell/hold bias with an invalidation level.',
+        group: 'technical',
+        indicators: ['sma', 'wma', 'ema', 'adx', 'psar'],
+        timeframe: '1d',
+      },
+      {
+        text: 'Run a full technical breakdown on NVIDIA (NVDA) daily. Use RSI and MACD for momentum, Bollinger Bands for volatility squeeze/expansion, ATR for risk sizing, and SuperTrend for trend direction. Flag overbought/oversold zones, key levels, and whether indicators agree or conflict.',
+        group: 'technical',
+        indicators: ['rsi', 'macd', 'bbands', 'atr', 'supertrend'],
+        timeframe: '1d',
+      },
+      {
+        text: 'Weekly Bitcoin (BTC) analysis: Ichimoku cloud for trend and support/resistance, Stochastic and CCI for momentum extremes, OBV for volume confirmation, and Fibonacci retracement for key levels. Summarize trend regime, confluence zones, and a clear trade bias with invalidation.',
+        group: 'technical',
+        indicators: ['ichimoku', 'stoch', 'cci', 'obv', 'fib'],
+        timeframe: '1w',
+      },
     ],
   },
   {
@@ -106,7 +122,11 @@ const categories: Category[] = [
 ];
 
 interface ExampleCategoriesProps {
-  onSelectExample: (text: string, group?: string) => void;
+  onSelectExample: (
+    text: string,
+    group?: string,
+    options?: { indicators?: string[]; timeframe?: string },
+  ) => void;
   className?: string;
 }
 
@@ -119,8 +139,11 @@ export const ExampleCategories = memo(({ onSelectExample, className }: ExampleCa
   }, []);
 
   const handleExampleSelect = useCallback(
-    (text: string, group?: string) => {
-      onSelectExample(text, group);
+    (example: ExampleItem) => {
+      onSelectExample(example.text, example.group, {
+        indicators: example.indicators,
+        timeframe: example.timeframe,
+      });
       setSelectedCategory(null);
     },
     [onSelectExample],
@@ -225,7 +248,7 @@ export const ExampleCategories = memo(({ onSelectExample, className }: ExampleCa
               {activeCategory.examples.map((example) => (
                 <button
                   key={example.text}
-                  onClick={() => handleExampleSelect(example.text, example.group)}
+                  onClick={() => handleExampleSelect(example)}
                   className={cn(
                     'group flex items-center justify-between w-full px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-sm',
                     'text-left text-xs sm:text-sm transition-colors',
