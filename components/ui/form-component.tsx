@@ -22,7 +22,15 @@ import {
 } from '@/ai/providers';
 import { X, Check, ChevronsUpDown, Wand2, Upload, CheckIcon, Zap, Sparkles, ArrowUpRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog';
-import { cn, SearchGroup, SearchGroupId, getSearchGroups, SearchProvider, isSearchGroupComingSoon } from '@/lib/utils';
+import {
+  cn,
+  DEFAULT_SEARCH_GROUP,
+  SearchGroup,
+  SearchGroupId,
+  getSearchGroups,
+  SearchProvider,
+  isSearchGroupComingSoon,
+} from '@/lib/utils';
 import {
   INDICATOR_DEFS,
   CATEGORY_LABELS,
@@ -1860,10 +1868,10 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
 
     const handleToggleExtreme = useCallback(() => {
       if (isExtreme) {
-        // Switch back to web mode
-        const webGroup = dynamicSearchGroups.find((group) => group.id === 'web');
-        if (webGroup) {
-          onGroupSelect(webGroup);
+        // Switch back to default mode
+        const defaultGroup = dynamicSearchGroups.find((group) => group.id === DEFAULT_SEARCH_GROUP);
+        if (defaultGroup) {
+          onGroupSelect(defaultGroup);
         }
       } else {
         // Switch to extreme mode - available to everyone (no authentication required)
@@ -1928,10 +1936,10 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
     // Handle group selector button click (mobile only)
     const handleGroupSelectorClick = useCallback(() => {
       if (isExtreme) {
-        // Switch back to web mode when clicking groups in extreme mode
-        const webGroup = dynamicSearchGroups.find((group) => group.id === 'web');
-        if (webGroup) {
-          onGroupSelect(webGroup);
+        // Switch back to default mode when clicking groups in extreme mode
+        const defaultGroup = dynamicSearchGroups.find((group) => group.id === DEFAULT_SEARCH_GROUP);
+        if (defaultGroup) {
+          onGroupSelect(defaultGroup);
         }
       } else {
         setOpen(true);
@@ -2521,19 +2529,18 @@ const FormComponent: React.FC<FormComponentProps> = ({
     };
   }, [cleanupMediaRecorder]);
 
-  // Reset selectedGroup to 'web' if it's set to a disabled group
+  // Reset to default mode if a disabled group is selected
   useEffect(() => {
     const disabledGroups = [
       'connectors',
       'code',
       'academic',
-      'chat',
       'memory',
       'youtube',
       'prediction',
     ];
     if (disabledGroups.includes(selectedGroup)) {
-      setSelectedGroup('web');
+      setSelectedGroup(DEFAULT_SEARCH_GROUP);
     }
   }, [selectedGroup, setSelectedGroup]);
 
@@ -4084,12 +4091,19 @@ const FormComponent: React.FC<FormComponentProps> = ({
                   {(() => {
                     const dynamicGroups = getSearchGroups();
                     const activeGroup = dynamicGroups.find((g) => g.id === selectedGroup);
-                    const webGroup = dynamicGroups.find((g) => g.id === 'web');
-                    if (!activeGroup || activeGroup.id === 'web' || !webGroup) return null;
+                    const defaultGroup = dynamicGroups.find((g) => g.id === DEFAULT_SEARCH_GROUP);
+                    if (
+                      !activeGroup ||
+                      activeGroup.id === DEFAULT_SEARCH_GROUP ||
+                      activeGroup.id === 'web' ||
+                      !defaultGroup
+                    ) {
+                      return null;
+                    }
                     return (
                       <button
                         className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-accent text-accent-foreground border border-border/40 hover:bg-accent/80 transition-colors"
-                        onClick={() => handleGroupSelect(webGroup as SearchGroup)}
+                        onClick={() => handleGroupSelect(defaultGroup as SearchGroup)}
                       >
                         <HugeiconsIcon icon={activeGroup.icon} size={12} color="currentColor" strokeWidth={1.5} />
                         <span>{activeGroup.name}</span>

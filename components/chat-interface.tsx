@@ -36,7 +36,7 @@ import { useOptimizedScroll } from '@/hooks/use-optimized-scroll';
 // Utility and type imports
 import { SEARCH_LIMITS, TEMPORARILY_DISABLED_PAGES } from '@/lib/constants';
 import { ChatSDKError } from '@/lib/errors';
-import { cn, SearchGroupId, invalidateChatsCache, isSearchGroupComingSoon } from '@/lib/utils';
+import { cn, DEFAULT_SEARCH_GROUP, SearchGroupId, invalidateChatsCache, isSearchGroupComingSoon } from '@/lib/utils';
 import { requiresProSubscription, DEFAULT_MODEL_ID, isSelectableModel, isModelComingSoon } from '@/ai/providers';
 import { ConnectorProvider } from '@/lib/connectors';
 import { MarketTickerStrip, MARKET_TICKER_HEIGHT_CLASS } from '@/components/market-ticker-strip';
@@ -73,11 +73,14 @@ const ChatInterface = memo(
     const [input, setInput] = useState<string>('');
 
     const [selectedModel, setSelectedModel] = useLocalStorage('bharatx-selected-model', DEFAULT_MODEL_ID);
-    const [selectedGroup, setSelectedGroup] = useLocalStorage<SearchGroupId>('bharatx-selected-group', 'web');
+    const [selectedGroup, setSelectedGroup] = useLocalStorage<SearchGroupId>(
+      'bharatx-selected-group',
+      DEFAULT_SEARCH_GROUP,
+    );
 
     useEffect(() => {
       if (isSearchGroupComingSoon(selectedGroup)) {
-        setSelectedGroup('web');
+        setSelectedGroup(DEFAULT_SEARCH_GROUP);
       }
     }, [selectedGroup, setSelectedGroup]);
     const [selectedConnectors, setSelectedConnectors] = useState<ConnectorProvider[]>([]);

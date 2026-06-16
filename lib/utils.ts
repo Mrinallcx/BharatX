@@ -21,6 +21,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+
 export type SearchGroupId =
   | 'web'
   | 'x'
@@ -38,6 +39,9 @@ export type SearchGroupId =
   | 'technical'
   | 'multi-agent'
   | 'agent-thor';
+
+/** Silent default when no specialized search mode is active. */
+export const DEFAULT_SEARCH_GROUP = 'chat' as const satisfies SearchGroupId;
 
 // Search provider information for dynamic descriptions
 export const searchProviderInfo = {
@@ -63,14 +67,14 @@ export function getSearchGroups(searchProvider: SearchProvider = 'parallel') {
       name: 'Web',
       description: getWebSearchDescription(searchProvider),
       icon: GlobalSearchIcon,
-      show: false, // Default mode — hidden from picker; use X/Stocks/etc. badges to switch
+      show: false, // Hidden from picker — switch via mode badges or localStorage
     },
     {
       id: 'chat' as const,
       name: 'Chat',
       description: 'Talk to the model directly.',
       icon: ChattingIcon,
-      show: true,
+      show: false, // Default mode — hidden from picker; use Stocks/Crypto/etc. badges to switch
     },
     {
       id: 'x' as const,
