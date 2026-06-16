@@ -1829,7 +1829,6 @@ const GroupModeToggle: React.FC<GroupSelectorProps> = React.memo(
           if (group.id === 'connectors') return false; // Exclude connectors from dropdown
           if (group.id === 'code') return false; // Exclude code from dropdown
           if (group.id === 'academic') return false; // Exclude academic from dropdown
-          if (group.id === 'chat') return false; // Exclude chat from dropdown
           if (group.id === 'memory') return false; // Exclude memory from dropdown
           if (group.id === 'youtube') return false; // Exclude youtube from dropdown
           return true;
@@ -4039,7 +4038,7 @@ const FormComponent: React.FC<FormComponentProps> = ({
                           {(() => {
                             const dynamicGroups = getSearchGroups();
                             return dynamicGroups
-                              .filter((g) => g.show && g.id !== 'extreme' && g.id !== 'connectors' && g.id !== 'code' && g.id !== 'memory' && g.id !== 'chat' && g.id !== 'academic' && g.id !== 'youtube')
+                              .filter((g) => g.show && g.id !== 'extreme' && g.id !== 'connectors' && g.id !== 'code' && g.id !== 'memory' && g.id !== 'academic' && g.id !== 'youtube')
                               .map((group) => {
                                 const isSelected = selectedGroup === group.id;
                                 const isComingSoon = isSearchGroupComingSoon(group.id);
