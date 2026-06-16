@@ -5,8 +5,9 @@ import 'leaflet/dist/leaflet.css';
 import { Metadata, Viewport } from 'next';
 import { Be_Vietnam_Pro, Inter, Baumans } from 'next/font/google';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
+import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Toaster } from '@/components/ui/sonner';
-import { ClientAnalytics } from '@/components/client-analytics';
 // import { Databuddy } from '@databuddy/sdk';
 
 import { Providers } from './providers';
@@ -137,7 +138,8 @@ export default function RootLayout({
           </Providers>
         </NuqsAdapter>
         {/* <Databuddy clientId={process.env.DATABUDDY_CLIENT_ID!} enableBatching={true} trackSessions={true} /> */}
-        <ClientAnalytics />
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
